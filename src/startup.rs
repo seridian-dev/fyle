@@ -41,6 +41,7 @@ pub fn parse_args() -> PathBuf {
                 println!("Fyle {}", env!("CARGO_PKG_VERSION"));
                 std::process::exit(0);
             }
+            Some("--automation") => {}
             Some("--home") => location = dirs::home_dir(),
             Some("--downloads") => location = dirs::download_dir(),
             Some("--") => {

@@ -19,7 +19,13 @@ impl Default for DirectoryLoader {
                     request = newer;
                 }
                 let (generation, path, hidden) = request;
+                let started = std::time::Instant::now();
                 let result = load_directory_entries(&path, hidden, &HashSet::new());
+                log::debug!(
+                    "Directory scan generation {generation} finished in {:?}; success={}",
+                    started.elapsed(),
+                    result.is_ok()
+                );
                 if outgoing.send((generation, result)).is_err() {
                     break;
                 }
@@ -36,6 +42,10 @@ impl Default for DirectoryLoader {
 impl DirectoryLoader {
     pub fn request(&mut self, path: PathBuf, show_hidden: bool) {
         self.generation = self.generation.wrapping_add(1);
+        log::debug!(
+            "Directory scan requested: generation={}, hidden={show_hidden}",
+            self.generation
+        );
         let _ = self.requests.send((self.generation, path, show_hidden));
     }
 

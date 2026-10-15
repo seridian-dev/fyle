@@ -61,6 +61,70 @@ manually with `sudo /usr/local/bin/fyle-cli update`. Uninstall removes launchers
 and the desktop entry, retaining the managed data/cache for reinstall or rollback.
 The raw Cargo binaries have no updater; use the installed launchers for updates.
 
+## Crash reports and developer diagnostics
+
+```sh
+fyle-cli doctor --json                  # version/commit, OS, desktop and session checks
+fyle-cli crashes                       # recent local reports
+fyle-cli crashes --latest               # newest report with backtrace
+fyle-cli logs --tail 100 --follow        # bounded live log tails
+fyle-cli debug bundle --output fyle-debug.json
+fyle-cli debug run -- --home            # reproduce with debug logs and full backtraces
+fyle-cli debug paths                    # locate diagnostics and updater data
+```
+
+Rust panics record a structured report and backtrace, including worker panics.
+GUI startup errors are recorded too. The managed launcher supervises GUI exits,
+keeps native stderr, and records abnormal exit codes/signals even when Rust cannot
+run a panic hook. Normal closes, argument errors and ordinary SIGINT/SIGTERM exits
+do not create native crash reports. Native fault reports contain the signal and
+stderr; a native stack still requires a debugger/core dump.
+
+Reports include version and Git revision. Local retention keeps 20 recent crash
+reports, bounded per-session log segments, and a bounded selection in bundles.
+No telemetry is uploaded. No document contents or full environment are scanned.
+Raw local reports can contain paths and error text; bundles replace home paths
+and credential-like lines. Review a bundle before sharing it. Exports refuse to
+overwrite existing files. `--output -` writes bundle JSON to stdout.
+
+Use `FYLE_DIAGNOSTICS_DIR=/path/to/test-logs` to isolate a reproduction. Build from
+source with `cargo build --bins`, then use `target/debug/fyle-cli debug run` for
+richer stack details. See the [debugging guide](docs/debugging.md).
+
+## Agent GUI harness
+
+Agents can inspect and control an explicitly enabled Fyle window without desktop
+input/capture permissions. The harness supplies structured state, visible control
+bounds, semantic actions, real egui input events and PNGs from the app renderer.
+
+```sh
+fyle-cli gui launch --path /path/to/test-folder
+fyle-cli gui sessions
+fyle-cli gui state
+fyle-cli gui screenshot --output fyle-window.png
+fyle-cli gui action search --query Cargo
+fyle-cli gui action view --mode grid
+fyle-cli gui close
+```
+
+Use `--session ID` when multiple sessions exist. State includes loading/busy flags,
+dialog/input values, entries, selection, control bounds, pixel scale and a snapshot
+ID. Pixel clicks/scrolls require that snapshot ID and reject stale state. Keyboard
+and text input are delivered only to this app. Normal Fyle launches expose no
+control endpoint; `gui launch` or `fyle --automation` explicitly enables one.
+
+Run the real GUI regression harness (requires a graphical session):
+
+```sh
+cargo build --bins
+python3 scripts/gui_smoke.py --cli target/debug/fyle-cli --output-dir gui-artifacts
+```
+
+It uses temporary fixture files, exercises clicks, typing, keys, view switching,
+folder creation/navigation, and saves five rendered PNG/state pairs. CI runs it
+under Xvfb/Mesa and uploads the evidence as `gui-state-and-screenshots`.
+See the [agent protocol guide](docs/agent-harness.md).
+
 ## Linux desktops and init systems
 
 Fyle launches directly in an existing graphical session on either systemd or

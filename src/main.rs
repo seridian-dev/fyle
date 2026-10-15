@@ -10,15 +10,17 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn main() -> Result<(), eframe::Error> {
     // Initialize logging
-    env_logger::init();
+    fyle::diagnostics::init_gui();
 
     // Parse command line arguments
+    let automation = std::env::var("FYLE_AUTOMATION").as_deref() == Ok("1")
+        || std::env::args_os().any(|arg| arg == "--automation");
     let initial_path = parse_args();
 
     log::info!(
-        "Starting Fyle v{} with initial path: {}",
+        "Starting Fyle v{} ({})",
         VERSION,
-        initial_path.display()
+        fyle::diagnostics::revision()
     );
 
     let options = eframe::NativeOptions {
@@ -31,12 +33,28 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
 
-    eframe::run_native(
+    let result = eframe::run_native(
         "Fyle",
         options,
         Box::new(move |cc| {
             setup_cyberpunk_theme(&cc.egui_ctx);
-            Box::new(FileManager::new(initial_path))
+            let mut app = FileManager::new(initial_path);
+            if automation {
+                if let Err(error) = app.enable_automation(&cc.egui_ctx) {
+                    log::error!("Harness startup failed: {error:#}");
+                    app.harness_error(error.to_string());
+                }
+            }
+            Box::new(app)
         }),
-    )
+    );
+    if let Err(error) = &result {
+        log::error!("GUI startup failed: {error}");
+        let _ = fyle::diagnostics::DiagnosticsStore::default().record_crash(
+            "startup",
+            &error.to_string(),
+            "",
+        );
+    }
+    result
 }

@@ -17,10 +17,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev desktop-file-utils
+      - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev desktop-file-utils xvfb libgl1-mesa-dri
       - run: cargo fmt --check
       - run: cargo test --locked --all-features
       - run: cargo test --locked --no-default-features --features gui
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - run: bash -n install.sh && desktop-file-validate fyle.desktop
       - run: python3 -m unittest discover -s tests -p "test_*.py"
+      - run: cargo build --locked --bins
+      - name: Exercise GUI and capture agent-visible state
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" python3 scripts/gui_smoke.py --cli target/debug/fyle-cli --output-dir gui-artifacts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gui-state-and-screenshots
+          path: gui-artifacts

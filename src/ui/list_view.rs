@@ -99,6 +99,13 @@ fn render_entry_row(ui: &mut Ui, entry: &FileEntry, selected: bool) -> Option<Vi
             .sense(Sense::click()),
     );
 
+    crate::ui::expose_control(
+        ui,
+        &format!("entry:{}", entry.name),
+        &entry.name,
+        &name_response,
+    );
+
     // Double-click to navigate or open
     if name_response.double_clicked() {
         if entry.is_dir {

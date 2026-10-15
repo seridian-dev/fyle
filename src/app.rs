@@ -1,4 +1,5 @@
 mod actions;
+mod automation;
 mod render;
 use crate::theme::colors;
 use crate::ui::{
@@ -27,6 +28,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 pub(crate) struct FileManager {
+    automation: Option<automation::Automation>,
     current_path: PathBuf,
     entries: Vec<FileEntry>,
     cached_entries: Vec<FileEntry>,
@@ -62,6 +64,7 @@ impl FileManager {
         };
 
         let mut app = Self {
+            automation: None,
             current_path: current_path.clone(),
             entries: Vec::new(),
             cached_entries: Vec::new(),
@@ -110,7 +113,10 @@ impl FileManager {
                     self.cached_entries = entries;
                     self.apply_filter();
                 }
-                Err(e) => self.error_message = Some(format!("Failed to load directory: {e:#}")),
+                Err(e) => {
+                    log::error!("Directory scan failed: {e:#}");
+                    self.error_message = Some(format!("Failed to load directory: {e:#}"));
+                }
             }
         }
     }
@@ -123,6 +129,7 @@ impl FileManager {
                     self.clipboard_operation = None;
                 }
                 if let Err(error) = result {
+                    log::error!("File operation failed: {error:#}");
                     self.error_message = Some(format!("File operation failed: {error:#}"));
                 }
                 self.operation = None;

@@ -147,3 +147,31 @@ mod performance_tests {
         }
     }
 }
+
+pub(crate) const HARNESS_CONTROLS_ID: &str = "fyle_harness_controls";
+pub(crate) type ControlMap =
+    std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, serde_json::Value>>>;
+/// Expose only controls from this app, and only in an explicitly enabled session.
+pub(crate) fn expose_control(
+    ui: &eframe::egui::Ui,
+    id: &str,
+    label: &str,
+    response: &eframe::egui::Response,
+) {
+    let Some(controls) = ui
+        .ctx()
+        .data(|data| data.get_temp::<ControlMap>(eframe::egui::Id::new(HARNESS_CONTROLS_ID)))
+    else {
+        return;
+    };
+    let rect = response.rect.intersect(ui.clip_rect());
+    if !rect.is_positive() {
+        return;
+    }
+    let scale = ui.ctx().pixels_per_point();
+    controls.lock().unwrap_or_else(|error| error.into_inner()).insert(id.into(), serde_json::json!({
+        "id":id,"label":label,"enabled":response.enabled(),"focused":response.has_focus(),
+        "rect_points":[rect.min.x,rect.min.y,rect.width(),rect.height()],
+        "rect_pixels":[rect.min.x*scale,rect.min.y*scale,rect.width()*scale,rect.height()*scale],
+    }));
+}

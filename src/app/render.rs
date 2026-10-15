@@ -95,6 +95,9 @@ impl FileManager {
 }
 
 impl eframe::App for FileManager {
+    fn raw_input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
+        self.automation_input(ctx, input);
+    }
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.operation.is_some() && ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -208,5 +211,6 @@ impl eframe::App for FileManager {
         }
 
         self.show_dialogs(ctx);
+        self.automation_finish(ctx);
     }
 }

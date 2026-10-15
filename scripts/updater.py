@@ -9,6 +9,9 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
+import threading
+from datetime import datetime, timezone
 import subprocess
 import sys
 import tempfile
@@ -194,6 +197,7 @@ def update(root, automatic=False, check_only=False):
                 manager_bytes = manager.read_bytes()
                 compile(manager_bytes, str(manager), 'exec')
                 activate(root, binaries, revision)
+                record_build(root, root / 'source', revision)
                 atomic_write(root / 'updater.py', manager_bytes, 0o755)
                 prune_versions(root)
                 message = 'Updated to ' + revision[:12] + '; active on next launch'
@@ -235,6 +239,7 @@ def install(root, source, binary_dir, desktop_dir, system=False):
         except (subprocess.SubprocessError, FileNotFoundError):
             revision = 'local-' + hashlib.sha256((binaries / 'fyle').read_bytes()).hexdigest()[:16]
         activate(root, binaries, revision)
+        record_build(root, source, revision)
         atomic_write(root / 'updater.py', Path(__file__).read_bytes(), 0o755)
         old_config = read_json(root / 'config.json')
         config = dict(old_config, automatic=old_config.get('automatic', not system), branch=BRANCH, upstream=UPSTREAM)
@@ -246,6 +251,101 @@ def install(root, source, binary_dir, desktop_dir, system=False):
             atomic_write(binary_dir / name, launcher_text(root / 'updater.py', name).encode(), 0o755)
         atomic_write(desktop_dir / 'fyle.desktop', desktop_text((source / 'fyle.desktop').read_text(), binary_dir / 'fyle').encode())
         print(f'Installed Fyle ({revision[:12]}) to {binary_dir}; upstream {BRANCH}; automatic updates: {config["automatic"]}')
+
+
+def record_build(root, source, revision):
+    try:
+        match = re.search(r'^version\s*=\s*"([^"]+)"', (source / 'Cargo.toml').read_text(), re.MULTILINE)
+        version = match.group(1) if match else 'unknown'
+    except OSError:
+        version = 'unknown'
+    write_json(root / 'versions' / revision / 'build.json', {'version': version, 'revision': revision})
+
+
+def prune_diagnostics(folder, pattern, keep=20):
+    for path in sorted(folder.glob(pattern), reverse=True)[keep:]:
+        if path.is_file() and not path.is_symlink():
+            try:
+                path.unlink()
+            except OSError:
+                pass
+
+
+def supervise_gui(root, executable, arguments, environment):
+    """Capture native stderr and abnormal exits without collecting document arguments."""
+    data = Path(environment.get('XDG_DATA_HOME', str(Path.home() / '.local/share')))
+    folder = Path(environment.get('FYLE_DIAGNOSTICS_DIR', str(data / 'fyle/diagnostics')))
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        folder.chmod(0o700)
+        path = folder / f'native-{time.time_ns()}-{os.getpid()}.log'
+        output = path.open('xb')
+        path.chmod(0o600)
+    except OSError:
+        return subprocess.call([str(executable), *arguments], env=environment)
+    process = subprocess.Popen([str(executable), *arguments], env=environment,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+    handlers = {}
+    if threading.current_thread() is threading.main_thread():
+        for signum in [signal.SIGTERM, signal.SIGINT]:
+            handlers[signum] = signal.getsignal(signum)
+            def forward(number, _frame):
+                if process.poll() is None:
+                    try:
+                        process.send_signal(number)
+                    except ProcessLookupError:
+                        pass
+            signal.signal(signum, forward)
+    size = 0
+    try:
+        while True:
+            chunk = process.stdout.read(8192)
+            if not chunk:
+                break
+            if output is not None:
+                try:
+                    if size + len(chunk) > 1024 * 1024:
+                        output.close()
+                        os.replace(path, path.with_suffix('.previous.log'))
+                        output = path.open('xb')
+                        path.chmod(0o600)
+                        size = 0
+                    output.write(chunk)
+                    output.flush()
+                    size += len(chunk)
+                except OSError:
+                    if output is not None:
+                        output.close()
+                    output = None
+        code = process.wait()
+    finally:
+        process.stdout.close()
+        if output is not None:
+            output.close()
+        for signum, handler in handlers.items():
+            signal.signal(signum, handler)
+    if code not in [0, 2, -signal.SIGTERM, -signal.SIGINT]:
+        try:
+            try:
+                info = read_json(root / 'current/build.json')
+            except ValueError:
+                info = {}
+            report = dict(info, version=info.get('version', 'unknown'), schema_version=1, kind='native_exit',
+                          timestamp=datetime.now(timezone.utc).isoformat(), pid=process.pid,
+                          revision=current_revision(root), exit_code=code,
+                          message=f'GUI exited with status {code}', backtrace='', log=path.name)
+            if code < 0:
+                try:
+                    report['signal'] = signal.Signals(-code).name
+                except ValueError:
+                    report['signal'] = str(-code)
+            atomic_write(folder / f'crash-{time.time_ns()}-{process.pid}.json',
+                         json.dumps(report, indent=2).encode(), 0o600)
+            prune_diagnostics(folder, 'crash-*.json')
+        except (OSError, ValueError):
+            pass
+    prune_diagnostics(folder, 'native-*.log')
+    return code
 
 
 def maybe_background_update(root):
@@ -294,10 +394,15 @@ def main():
     if args.action == 'run':
         if args.binary == 'fyle-cli' and args.arguments[:1] == ['update']:
             os.execv(sys.executable, [sys.executable, str(root / 'updater.py'), '--root', str(root), 'update', *args.arguments[1:]])
+        executable = root / 'current' / args.binary
+        data = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local/share')))
+        diagnostics = os.environ.get('FYLE_DIAGNOSTICS_DIR', str(data / 'fyle/diagnostics'))
+        environment = dict(os.environ, FYLE_MANAGED_ROOT=str(root), FYLE_DIAGNOSTICS_DIR=diagnostics)
         if args.binary == 'fyle' and not any(arg in ['--version', '-v', '--help', '-h'] for arg in args.arguments):
             maybe_background_update(root)
-        executable = root / 'current' / args.binary
-        os.execv(str(executable), [str(executable), *args.arguments])
+            code = supervise_gui(root, executable, args.arguments, environment)
+            sys.exit(code if code >= 0 else 128 - code)
+        os.execve(str(executable), [str(executable), *args.arguments], environment)
     elif args.status:
         print(json.dumps(dict(read_json(root / 'config.json'), **read_json(root / 'status.json'), current_revision=current_revision(root)), indent=2))
     elif args.enable_auto or args.disable_auto:

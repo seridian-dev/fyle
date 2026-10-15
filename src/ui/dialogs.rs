@@ -263,6 +263,7 @@ pub fn show_create_folder_dialog(
         .show(ctx, |ui| {
             ui.label("Folder name:");
             let response = ui.text_edit_singleline(&mut state.name);
+            crate::ui::expose_control(ui, "dialog_name", "Name", &response);
 
             // Focus the text field
             if response.lost_focus()
@@ -327,6 +328,7 @@ pub fn show_create_file_dialog(
         .show(ctx, |ui| {
             ui.label("File name:");
             let response = ui.text_edit_singleline(&mut state.name);
+            crate::ui::expose_control(ui, "dialog_name", "Name", &response);
 
             // Enter key to confirm
             if response.lost_focus()
@@ -399,6 +401,7 @@ pub fn show_rename_dialog(
         .show(ctx, |ui| {
             ui.label(RichText::new("New name:").color(colors::CYBER_GREEN));
             let response = ui.text_edit_singleline(&mut state.new_name);
+            crate::ui::expose_control(ui, "dialog_name", "New name", &response);
 
             // Enter key to confirm
             if response.lost_focus()

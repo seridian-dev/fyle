@@ -11,6 +11,16 @@ pub enum FileOperation {
     Rename(PathBuf, String),
 }
 impl FileOperation {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Copy(..) => "copy",
+            Self::Move(..) => "move",
+            Self::Remove(..) => "remove",
+            Self::CreateFolder(..) => "create_folder",
+            Self::CreateFile(..) => "create_file",
+            Self::Rename(..) => "rename",
+        }
+    }
     pub fn is_move(&self) -> bool {
         matches!(self, Self::Move(..))
     }
@@ -44,7 +54,16 @@ impl OperationJob {
         let clears_cut_clipboard = operation.is_move();
         let (sender, result) = mpsc::channel();
         std::thread::spawn(move || {
-            let _ = sender.send(operation.execute());
+            let kind = operation.kind();
+            let started = std::time::Instant::now();
+            log::debug!("Starting {kind} operation");
+            let outcome = operation.execute();
+            log::debug!(
+                "{kind} operation finished in {:?}; success={}",
+                started.elapsed(),
+                outcome.is_ok()
+            );
+            let _ = sender.send(outcome);
         });
         Self {
             result,

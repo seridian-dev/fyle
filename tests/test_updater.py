@@ -174,6 +174,44 @@ class UpdaterTests(unittest.TestCase):
             result = subprocess.run([str(installation / 'current/fyle'), '--version'], check=True, capture_output=True, text=True)
             self.assertEqual(result.stdout.strip(), 'fixture')
 
+    def test_native_exit_is_recorded_without_logging_document_arguments(self):
+        import sys
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            reports = root / 'diagnostics'
+            env = dict(updater.os.environ, FYLE_DIAGNOSTICS_DIR=str(reports))
+            code = updater.supervise_gui(root, Path(sys.executable), ['-c', "import sys; print('native failure', file=sys.stderr); sys.exit(7)", '/private/document'], env)
+            self.assertEqual(code, 7)
+            crashes = list(reports.glob('crash-*.json'))
+            self.assertEqual(len(crashes), 1)
+            text = crashes[0].read_text()
+            self.assertNotIn('/private/document', text)
+            self.assertIn('native_exit', text)
+            self.assertIn('native failure', next(reports.glob('native-*.log')).read_text())
+
+    def test_native_signal_is_captured(self):
+        import sys
+        import json
+        import signal
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            reports = root / 'diagnostics'
+            env = dict(updater.os.environ, FYLE_DIAGNOSTICS_DIR=str(reports))
+            code = updater.supervise_gui(root, Path(sys.executable), ['-c', 'import os, resource, signal; resource.setrlimit(resource.RLIMIT_CORE, (0, 0)); os.kill(os.getpid(), signal.SIGABRT)'], env)
+            self.assertEqual(code, -signal.SIGABRT)
+            report = json.loads(next(reports.glob('crash-*.json')).read_text())
+            self.assertEqual(report['signal'], 'SIGABRT')
+
+    def test_clean_gui_exit_does_not_create_a_crash_report(self):
+        import sys
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            reports = root / 'diagnostics'
+            env = dict(updater.os.environ, FYLE_DIAGNOSTICS_DIR=str(reports))
+            code = updater.supervise_gui(root, Path(sys.executable), ['-c', 'pass'], env)
+            self.assertEqual(code, 0)
+            self.assertEqual(list(reports.glob('crash-*.json')), [])
+
     def test_offline_update_records_failure_without_changing_version(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

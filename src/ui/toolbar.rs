@@ -39,6 +39,7 @@ fn render_toolbar_button(ui: &mut Ui, icon: &str, label: &str, color: Color32) -
     .rounding(Rounding::same(4.0));
 
     let response = ui.add(button);
+    crate::ui::expose_control(ui, &label.to_ascii_lowercase(), label, &response);
 
     if response.hovered() {
         ui.painter().rect_stroke(
@@ -80,7 +81,7 @@ pub fn render_toolbar(
             // Subtitle
             ui.add_space(4.0);
             ui.label(
-                RichText::new("v0.4.0")
+                RichText::new(concat!("v", env!("CARGO_PKG_VERSION")))
                     .color(colors::ELECTRIC_BLUE.linear_multiply(0.4))
                     .size(10.0),
             );
@@ -193,6 +194,7 @@ pub fn render_toolbar(
                 .margin(Vec2::new(8.0, 4.0)),
         );
 
+        crate::ui::expose_control(ui, "search", "Filter files", &search_response);
         if search_response.changed() {
             action = Some(ToolbarAction::Search(search_query.clone()));
         }
@@ -223,26 +225,22 @@ pub fn render_toolbar(
 
             // View mode toggles
             let grid_active = *view_mode == ViewMode::Grid;
-            if ui
-                .add(egui::SelectableLabel::new(
-                    grid_active,
-                    RichText::new("GRID").size(11.0),
-                ))
-                .clicked()
-                && !grid_active
-            {
+            let grid_response = ui.add(egui::SelectableLabel::new(
+                grid_active,
+                RichText::new("GRID").size(11.0),
+            ));
+            crate::ui::expose_control(ui, "grid", "Grid view", &grid_response);
+            if grid_response.clicked() && !grid_active {
                 action = Some(ToolbarAction::SetViewMode(ViewMode::Grid));
             }
 
             let list_active = *view_mode == ViewMode::List;
-            if ui
-                .add(egui::SelectableLabel::new(
-                    list_active,
-                    RichText::new("LIST").size(11.0),
-                ))
-                .clicked()
-                && !list_active
-            {
+            let list_response = ui.add(egui::SelectableLabel::new(
+                list_active,
+                RichText::new("LIST").size(11.0),
+            ));
+            crate::ui::expose_control(ui, "list", "List view", &list_response);
+            if list_response.clicked() && !list_active {
                 action = Some(ToolbarAction::SetViewMode(ViewMode::List));
             }
 

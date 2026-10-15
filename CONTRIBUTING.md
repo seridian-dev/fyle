@@ -34,3 +34,16 @@ desktop-file-validate fyle.desktop
 CI tests the headless library on Linux, macOS and Windows, plus full-feature
 compilation/tests on Linux. GUI behavior still needs manual smoke tests in
 actual KDE, GNOME and compositor sessions; CI does not simulate those desktops.
+
+For interactive debugging, read [the diagnostics guide](docs/debugging.md).
+Use `cargo build --bins` followed by `target/debug/fyle-cli debug run -- --home`.
+The CLI can collect JSON diagnostics without compiling the GUI using
+`cargo run --no-default-features --bin fyle-cli -- doctor --json`.
+Panic/native-exit tests run child processes with temporary diagnostics directories;
+never inject intentional failures into a user's normal diagnostics history.
+
+For changes affecting GUI behavior, run `scripts/gui_smoke.py` in a graphical
+session after `cargo build --bins`. See docs/agent-harness.md for structured state,
+real input, screenshot coordinates and session targeting. The CI artifact contains
+PNG/JSON evidence for agent review. Never attach a normal user window implicitly:
+launch an agent-owned automation session and explicitly target its ID.

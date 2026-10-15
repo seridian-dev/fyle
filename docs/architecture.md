@@ -70,3 +70,46 @@ refreshed from the successfully built source for subsequent runs.
 The distribution adapter has its own temporary-directory and local-Git tests.
 System-wide installation and package-manager ownership remain administrator
 concerns; automatic updates never prompt for or request elevated privileges.
+
+## Diagnostics boundary
+
+`src/diagnostics.rs` owns local report persistence, bounded logs, environment
+allowlisting and bundle redaction. The library remains headless. GUI startup
+installs a panic hook that persists a forced backtrace before invoking the
+previous hook; startup errors and background-operation failures are logged.
+`build.rs` embeds the Git revision and watches actual Git metadata paths, including
+worktree refs. Release builds retain symbols; debug builds provide richer detail.
+
+The managed launcher supervises the GUI with bounded stdout/stderr capture and
+records abnormal native exits without copying command-line arguments into the
+report. It forwards SIGINT/SIGTERM to its child. These reports complement Rust
+panic reports and may describe the same incident with the same PID. The launcher
+passes diagnostic/update paths through the child's environment only; it does not
+mutate global application environment or install an init-system service.
+
+Bundles are explicit local JSON exports with bounded tails and report counts.
+The exporter never overwrites a user file. Raw local logs are private and may
+contain paths/error text; shareable exports redact home paths and credential-like
+lines. This is deliberately independent of any hosted crash analytics SDK.
+
+## Agent GUI boundary
+
+`src/harness.rs` owns authenticated loopback transport, private session discovery
+and PNG encoding; it builds without egui. `src/app/automation.rs` applies requests
+to the application and the real `raw_input_hook`, then replies after rendering.
+`src/bin/support/gui.rs` is the JSON CLI client. Semantic commands use existing
+application handlers; pointer/key/text events run through egui, not global OS
+input. Optional control instrumentation exposes actual rendered control bounds.
+
+A session starts only by explicit automation opt-in. A random capability token
+lives in a private descriptor; CLI output and screenshots never include it. The
+server binds loopback only, authenticates before queuing, and bounds messages.
+Replies contain no executable shell commands. One screenshot request is in flight
+at a time; its state is latched when capture is requested so PNG metadata describes
+that rendered frame. Input epochs reject stale pixel actions, and image coordinates
+are converted using pixels-per-point. Closing removes the descriptor.
+
+`scripts/gui_smoke.py` validates actual app behavior with temporary fixtures and
+saves screenshots plus structured state. It also runs in CI with a software GL
+backend. This proves Fyle's own rendering/input path and does not assert native
+integration correctness on every window manager or permission environment.

@@ -51,6 +51,13 @@ fn render_grid_item(ui: &mut Ui, entry: &FileEntry) -> Option<ViewAction> {
                         )
                         .on_hover_text(&entry.name);
 
+                    crate::ui::expose_control(
+                        ui,
+                        &format!("entry:{}", entry.name),
+                        &entry.name,
+                        &name_response,
+                    );
+
                     // Double-click to navigate or open
                     if name_response.double_clicked() {
                         if entry.is_dir {

@@ -7,3 +7,7 @@
 /assets/fonts/MaterialSymbolsOutlined.woff2
 
 __pycache__/
+
+/gui-artifacts/
+/fyle-debug-*.json
+/fyle-gui-*.png
