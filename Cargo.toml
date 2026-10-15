@@ -1,0 +1,65 @@
+[package]
+name = "fyle"
+version = "0.4.0"
+edition = "2021"
+description = "A cyberpunk-themed file manager with embedded icon font"
+authors = ["Fyle Team"]
+license = "MIT"
+repository = "https://github.com/4cecoder/fyle"
+default-run = "fyle"
+keywords = ["file-manager", "gui", "egui", "cyberpunk", "icons"]
+categories = ["filesystem", "gui"]
+
+[features]
+default = ["gui"]
+gui = ["dep:eframe", "dep:egui", "dep:sysinfo"]
+trash = ["dep:trash"]
+
+[dependencies]
+# GUI framework
+eframe = { version = "0.27", optional = true }
+egui = { version = "0.27", optional = true }
+
+# File system and paths
+dirs = "5.0"
+url = "2"
+walkdir = "2.5"
+
+# System information
+sysinfo = { version = "0.30", optional = true }
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Optional: Trash support (enabled with --features trash)
+trash = { version = "4.0", optional = true }
+
+[dev-dependencies]
+tempfile = "3.10"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[[bin]]
+name = "fyle"
+path = "src/main.rs"
+required-features = ["gui"]
+
+[[bin]]
+name = "fyle-cli"
+path = "src/bin/fyle-cli.rs"

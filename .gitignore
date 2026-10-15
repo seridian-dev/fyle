@@ -1,0 +1,9 @@
+/target/
+*.log
+.env
+.env.*
+.DS_Store
+# Legacy downloaded error page, not a font.
+/assets/fonts/MaterialSymbolsOutlined.woff2
+
+__pycache__/
