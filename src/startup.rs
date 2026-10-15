@@ -28,6 +28,13 @@ pub fn resolve_location(input: &OsStr) -> Result<PathBuf> {
     }
 }
 
+/// Respect the option terminator so a folder named --automation is not an opt-in.
+pub fn automation_requested(args: impl IntoIterator<Item = std::ffi::OsString>) -> bool {
+    args.into_iter()
+        .take_while(|arg| arg != "--")
+        .any(|arg| arg == "--automation")
+}
+
 pub fn parse_args() -> PathBuf {
     let mut args = std::env::args_os().skip(1);
     let mut location = None;

@@ -10,7 +10,7 @@ filter, sort, bookmark, copy, move, rename and delete local files.
 ## Build and install
 
 Install a current stable Rust toolchain, Bash and Python 3. On Debian/Ubuntu,
-install `build-essential pkg-config libxkbcommon-dev libwayland-dev xdg-utils git python3`.
+install `build-essential pkg-config libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev xdg-utils git python3`.
 For desktop entry validation install `desktop-file-utils`.
 
 ```sh

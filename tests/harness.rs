@@ -56,3 +56,21 @@ fn dropping_a_session_removes_its_private_descriptor() {
     assert!(!path.exists());
     assert!(harness::session_path(temp.path(), "../../escape").is_err());
 }
+
+#[test]
+fn automation_requires_an_option_before_the_argument_terminator() {
+    let args = |values: &[&str]| {
+        values
+            .iter()
+            .map(std::ffi::OsString::from)
+            .collect::<Vec<_>>()
+    };
+    assert!(fyle::startup::automation_requested(args(&[
+        "--automation",
+        "/tmp"
+    ])));
+    assert!(!fyle::startup::automation_requested(args(&[
+        "--",
+        "--automation"
+    ])));
+}

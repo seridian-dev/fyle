@@ -247,7 +247,7 @@ pub struct RollingWriter {
 impl RollingWriter {
     pub fn new(path: PathBuf, limit: u64) -> std::io::Result<Self> {
         let mut options = fs::OpenOptions::new();
-        options.create(true).append(true);
+        options.create(true).read(true).write(true).truncate(false);
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
@@ -275,6 +275,7 @@ impl Write for RollingWriter {
             self.size = 0;
         }
         let bytes = &bytes[bytes.len().saturating_sub(self.limit as usize)..];
+        self.file.seek(SeekFrom::End(0))?;
         self.file.write_all(bytes)?;
         self.size += bytes.len() as u64;
         if self.mirror {

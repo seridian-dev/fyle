@@ -68,7 +68,8 @@ Use that returned snapshot for the next input. Stale IDs are rejected. Pixel
 input always requires an ID, and loading folders reject pixel input. Coordinates
 are native PNG image pixels, not screen coordinates; the app converts them to
 logical points. Use the original PNG dimensions if your image viewer resizes it.
-Right click uses `--button right`. Key names are egui names such as Enter, Escape,
+Automation instances retain app-local logical focus even when another desktop
+window is focused; the harness does not change OS focus. Right click uses `--button right`. Key names are egui names such as Enter, Escape,
 F5 and ArrowUp, with Ctrl/Alt/Shift modifiers. Text targets the focused widget.
 
 ## Image and state evidence

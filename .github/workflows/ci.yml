@@ -17,7 +17,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev desktop-file-utils xvfb libgl1-mesa-dri
+      - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libxkbcommon-x11-0 libegl1 desktop-file-utils xvfb libgl1-mesa-dri
       - run: cargo fmt --check
       - run: cargo test --locked --all-features
       - run: cargo test --locked --no-default-features --features gui
@@ -33,4 +33,6 @@ jobs:
         if: always()
         with:
           name: gui-state-and-screenshots
-          path: gui-artifacts
+          path: |
+            gui-artifacts
+            ~/.local/share/fyle/diagnostics

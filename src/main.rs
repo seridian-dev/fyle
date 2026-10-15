@@ -14,7 +14,7 @@ fn main() -> Result<(), eframe::Error> {
 
     // Parse command line arguments
     let automation = std::env::var("FYLE_AUTOMATION").as_deref() == Ok("1")
-        || std::env::args_os().any(|arg| arg == "--automation");
+        || fyle::startup::automation_requested(std::env::args_os().skip(1));
     let initial_path = parse_args();
 
     log::info!(

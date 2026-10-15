@@ -21,8 +21,11 @@ impl FileManager {
         self.error_message = Some(message);
     }
     pub(crate) fn enable_automation(&mut self, ctx: &egui::Context) -> Result<()> {
+        self.enable_automation_at(ctx, fyle::harness::directory())
+    }
+    fn enable_automation_at(&mut self, ctx: &egui::Context, root: PathBuf) -> Result<()> {
         let wakeup = ctx.clone();
-        let server = Server::start(fyle::harness::directory(), move || wakeup.request_repaint())?;
+        let server = Server::start(root, move || wakeup.request_repaint())?;
         ctx.data_mut(|data| {
             data.insert_temp(
                 egui::Id::new(crate::ui::HARNESS_CONTROLS_ID),
@@ -80,6 +83,11 @@ impl FileManager {
         let Some(mut automation) = self.automation.take() else {
             return;
         };
+        // Agent-owned sessions have logical focus without changing desktop focus.
+        input.focused = true;
+        input
+            .events
+            .retain(|event| !matches!(event, egui::Event::WindowFocused(_)));
         for event in &input.events {
             if let egui::Event::Screenshot { image, .. } = event {
                 automation.image = Some(image.clone());
@@ -365,6 +373,27 @@ impl FileManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn automation_input_has_app_local_focus_without_affecting_normal_windows() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = FileManager::new(dir.path().into());
+        let ctx = egui::Context::default();
+        let mut input = egui::RawInput {
+            focused: false,
+            events: vec![egui::Event::WindowFocused(false)],
+            ..Default::default()
+        };
+        app.automation_input(&ctx, &mut input);
+        assert!(!input.focused);
+        app.enable_automation_at(&ctx, dir.path().join("harness"))
+            .unwrap();
+        app.automation_input(&ctx, &mut input);
+        assert!(input.focused);
+        assert!(!input
+            .events
+            .iter()
+            .any(|event| matches!(event, egui::Event::WindowFocused(false))));
+    }
     #[test]
     fn stale_or_ungrounded_pointer_input_is_rejected_before_injection() {
         let dir = tempfile::tempdir().unwrap();

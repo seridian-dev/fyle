@@ -176,7 +176,20 @@ pub fn run(args: &[OsString]) -> Result<()> {
                 break session;
             }
             if let Some(status) = child.try_wait()? {
-                bail!("GUI launch failed ({status}); see {}", log_path.display());
+                let store = fyle::diagnostics::DiagnosticsStore::default();
+                let reports = store.crashes().unwrap_or_default();
+                let recent: Vec<_> = reports
+                    .into_iter()
+                    .take(3)
+                    .map(|report| json!({"kind":report["kind"],"message":report["message"]}))
+                    .collect();
+                let logs = store.logs(30).unwrap_or_default();
+                bail!(
+                    "GUI launch failed ({status}); see {}\nRecent reports: {}\nRecent logs: {}",
+                    log_path.display(),
+                    serde_json::to_string(&recent)?,
+                    serde_json::to_string(&logs)?
+                );
             }
             anyhow::ensure!(
                 Instant::now() < deadline,
