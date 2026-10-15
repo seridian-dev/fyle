@@ -61,8 +61,8 @@ and the [TDD workflow](CONTRIBUTING.md). CI checks Linux/macOS/Windows core test
 and Linux full-feature tests, formatting, Clippy and desktop entry validation.
 
 Bookmarks retain their legacy location: the OS config directory followed by
-`cyberpunk_fm/bookmarks.json`. Enable optional trash support with
-`cargo build --release --features trash`; otherwise deletion is permanent.
+`cyberpunk_fm/bookmarks.json`. The GUI Delete action permanently deletes files. The optional `trash` feature
+exposes a library API for moving files to trash; the GUI does not yet use it.
 The clipboard currently works within Fyle.
 
 ## License
