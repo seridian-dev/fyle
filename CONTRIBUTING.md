@@ -26,6 +26,7 @@ Before a PR:
 cargo fmt --check
 cargo test --locked --all-features
 cargo clippy --locked --all-targets --all-features -- -D warnings
+python3 -m unittest discover -s tests -p 'test_*.py'
 bash -n install.sh
 desktop-file-validate fyle.desktop
 ```

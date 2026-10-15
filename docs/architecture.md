@@ -49,3 +49,24 @@ DirectoryLoader owns one scan worker. Requests have generation numbers, queued
 superseded requests are skipped, and the UI discards old responses. Workers are
 not forcibly cancelled mid-I/O. A window owns its cache, loader and operation;
 there are no process-wide environment or working-directory mutations.
+
+## Managed update boundary
+
+`scripts/updater.py` is a Python-standard-library Unix installation adapter, kept
+outside the Rust filesystem library. Installed Python launchers execute the
+`current` version directly and may start a detached update check. The canonical
+repository and `main` branch are constants, not arbitrary downloaded commands.
+Subprocess arguments are passed without shell interpretation. Cargo builds from
+a dedicated checkout with a separate, reusable target directory.
+
+An advisory lock serializes installation, updates and rollback. Binaries are
+staged in a new version directory before a single symlink replacement activates
+the pair. Failed fetches/builds never change `current`; the previous version is
+retained for rollback. No updater changes a running executable in place. Status
+writes use atomic replacement, automatic attempts are throttled, and failed
+background checks cannot prevent the GUI from launching. The updater itself is
+refreshed from the successfully built source for subsequent runs.
+
+The distribution adapter has its own temporary-directory and local-Git tests.
+System-wide installation and package-manager ownership remain administrator
+concerns; automatic updates never prompt for or request elevated privileges.

@@ -10,7 +10,7 @@ filter, sort, bookmark, copy, move, rename and delete local files.
 ## Build and install
 
 Install a current stable Rust toolchain, Bash and Python 3. On Debian/Ubuntu,
-install `build-essential pkg-config libxkbcommon-dev libwayland-dev xdg-utils`.
+install `build-essential pkg-config libxkbcommon-dev libwayland-dev xdg-utils git python3`.
 For desktop entry validation install `desktop-file-utils`.
 
 ```sh
@@ -27,6 +27,39 @@ associations. `--system` installs into `/usr/local` and requires write access;
 `--uninstall` removes both executables and the desktop entry. `INSTALL_DIR`
 and `DESKTOP_DIR` override user install paths; `XDG_DATA_HOME` is respected.
 Uninstall does not choose a replacement default file manager.
+
+## Seamless updates
+
+`./install.sh` creates a managed user installation with automatic updates enabled.
+Normal GUI launches check Seridian's **main** branch (the repository's default
+branch, rather than `master`) at most once every six hours. Fetching and compiling
+happen in a detached, lower-priority background process. A successful build becomes
+active on the next launch; running windows keep their current binary. No OpenRC
+or systemd service is needed. Git, Cargo/Rust, Python 3 and the build dependencies
+must remain installed for source updates.
+
+```sh
+fyle-cli update --status       # current commit, update state and last error
+fyle-cli update --check        # check upstream without building
+fyle-cli update                # fetch, build and activate now
+fyle-cli update --rollback     # return to previous version; disable automatic updates
+fyle-cli update --disable-auto
+fyle-cli update --enable-auto
+```
+
+The launcher starts immediately while updates build. Failed fetches/builds keep
+the current version. Both binaries switch together through an atomic version
+pointer. A dedicated checkout is used, so updates never pull into your development
+checkout or discard local changes. Update logs and state live under
+`${XDG_DATA_HOME:-~/.local/share}/fyle/`; `update.log` contains build output. Three
+recent versions plus the rollback target are retained. Build caches are reused.
+`FYLE_NO_UPDATE=1 fyle` skips background checking for one launch.
+
+This source updater supports Unix user installations made by `install.sh`.
+System-wide installs disable automatic updates; an administrator can update them
+manually with `sudo /usr/local/bin/fyle-cli update`. Uninstall removes launchers
+and the desktop entry, retaining the managed data/cache for reinstall or rollback.
+The raw Cargo binaries have no updater; use the installed launchers for updates.
 
 ## Linux desktops and init systems
 

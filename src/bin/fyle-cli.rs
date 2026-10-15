@@ -30,7 +30,8 @@ fn main() -> anyhow::Result<()> {
             );
             println!("Init system: no dependency (OpenRC and systemd supported)");
         }
-        _ => println!("Usage: fyle-cli doctor"),
+        Some("update") => anyhow::bail!("Updates require a managed installation. Run ./install.sh, then use the installed fyle-cli update."),
+        _ => println!("Usage: fyle-cli doctor\nInstalled update commands: fyle-cli update [--check | --status | --rollback | --enable-auto | --disable-auto]"),
     }
     Ok(())
 }

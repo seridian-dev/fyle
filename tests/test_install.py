@@ -17,10 +17,11 @@ class InstallerTests(unittest.TestCase):
             source.mkdir()
             for name in ['install.sh', 'fyle.desktop']:
                 shutil.copy2(ROOT / name, source / name)
+            shutil.copytree(ROOT / 'scripts', source / 'scripts')
             tools = root / 'tools'
             tools.mkdir()
             cargo = tools / 'cargo'
-            cargo.write_text('#!/bin/sh\nmkdir -p target/release\nprintf "#!/bin/sh\\nexit 0\\n" > target/release/fyle\ncp target/release/fyle target/release/fyle-cli\n')
+            cargo.write_text('#!/bin/sh\nmkdir -p target/release\nprintf "#!/bin/sh\\nexit 0\\n" > target/release/fyle\ncp target/release/fyle target/release/fyle-cli\nchmod +x target/release/fyle target/release/fyle-cli\n')
             cargo.chmod(0o755)
             binary_dir = root / 'bin space $value %test'
             data = root / 'xdg data'
@@ -34,6 +35,13 @@ class InstallerTests(unittest.TestCase):
             self.assertNotIn('~', text)
             self.assertIn('%%test', text)
             self.assertTrue((binary_dir / 'fyle-cli').is_file())
+            subprocess.run([str(binary_dir / 'fyle'), '--version'], check=True)
+            subprocess.run([str(binary_dir / 'fyle-cli'), 'update', '--status'], check=True, capture_output=True)
+            managed = data / 'fyle'
+            self.assertTrue((managed / 'current/fyle').is_file())
+            subprocess.run([str(binary_dir / 'fyle-cli'), 'update', '--disable-auto'], check=True, capture_output=True)
+            import json
+            self.assertFalse(json.loads((managed / 'config.json').read_text())['automatic'])
             if shutil.which('desktop-file-validate'):
                 subprocess.run(['desktop-file-validate', str(entry)], check=True)
             subprocess.run(['bash', str(source / 'install.sh'), '--uninstall'], env=env, check=True)
