@@ -20,6 +20,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev desktop-file-utils
       - run: cargo fmt --check
       - run: cargo test --locked --all-features
+      - run: cargo test --locked --no-default-features --features gui
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - run: bash -n install.sh && desktop-file-validate fyle.desktop
       - run: python3 -m unittest discover -s tests -p "test_*.py"

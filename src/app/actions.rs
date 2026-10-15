@@ -2,6 +2,9 @@ use super::*;
 
 impl FileManager {
     pub(super) fn handle_keyboard(&mut self, ctx: &egui::Context) {
+        if self.dialog != DialogType::None || ctx.wants_keyboard_input() {
+            return;
+        }
         // Ctrl+Up - Go to parent
         if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp) && i.modifiers.ctrl) {
             self.go_up();
@@ -94,7 +97,7 @@ impl FileManager {
             ToolbarAction::SetViewMode(mode) => self.view_mode = mode,
             ToolbarAction::Search(query) => {
                 self.search_query = query;
-                self.load_entries();
+                self.apply_filter();
             }
             ToolbarAction::OpenTerminal => {
                 if let Err(e) = open_terminal(&self.current_path) {

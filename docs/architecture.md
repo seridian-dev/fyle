@@ -10,6 +10,8 @@ of tiny crates until separate dependency or release requirements justify one.
 | `src/core/file_ops/operations.rs` | Filesystem mutations | Safety and filesystem behavior |
 | `src/core/file_ops/listing.rs` | Directory queries, sorting and filtering | Query policy |
 | `src/core/file_ops/presentation.rs` | File labels, icons and sizes | Visual conventions |
+| `src/core/loader.rs` | Background scans and stale-result rejection | Filesystem query execution |
+| `src/core/job.rs` | Typed mutation intent and background execution | Operation scheduling |
 | `src/core/bookmarks.rs` | Persistent bookmarks | Storage format and migrations |
 | `src/desktop.rs` | Pure desktop policy and command construction | Desktop and terminal differences |
 | `src/core/opener.rs` | Process execution and executable discovery | OS integration |
@@ -36,3 +38,14 @@ Bookmarks currently retain the legacy `cyberpunk_fm/bookmarks.json` location
 under the OS config directory. Changing that requires a migration and tests.
 The current clipboard is internal to Fyle. D-Bus FileManager1, remote mounts,
 and session-wide clipboard integration are future adapters, not implied support.
+
+Rendering emits typed `FileOperation` requests. The composition root starts a
+single `OperationJob`, disables conflicting controls until completion, preserves
+errors and refreshes the directory afterward. Only successful Move jobs clear
+the cut clipboard. Trash behavior is selected by the feature at this boundary;
+there is no destructive fallback. No filesystem mutation runs in a view renderer.
+
+DirectoryLoader owns one scan worker. Requests have generation numbers, queued
+superseded requests are skipped, and the UI discards old responses. Workers are
+not forcibly cancelled mid-I/O. A window owns its cache, loader and operation;
+there are no process-wide environment or working-directory mutations.

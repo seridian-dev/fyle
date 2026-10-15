@@ -15,8 +15,8 @@ use crate::ui::{
     ViewAction,
 };
 use fyle::core::{
-    add_bookmark, filter_entries, format_size, load_bookmarks, load_directory_entries,
-    open_terminal, remove_bookmark, save_bookmarks, sort_entries,
+    add_bookmark, filter_entries, format_size, load_bookmarks, open_terminal, remove_bookmark,
+    save_bookmarks, sort_entries,
 };
 use fyle::types::{
     Bookmark, ClipboardOperation, DialogType, FileEntry, SortBy, SortOrder, ViewMode,
@@ -29,6 +29,11 @@ use std::path::PathBuf;
 pub(crate) struct FileManager {
     current_path: PathBuf,
     entries: Vec<FileEntry>,
+    cached_entries: Vec<FileEntry>,
+    loader: fyle::core::loader::DirectoryLoader,
+    loading: bool,
+    operation: Option<fyle::core::job::OperationJob>,
+    storage_cache: crate::ui::sidebar::StorageCache,
     view_mode: ViewMode,
     sort_by: SortBy,
     sort_order: SortOrder,
@@ -59,6 +64,11 @@ impl FileManager {
         let mut app = Self {
             current_path: current_path.clone(),
             entries: Vec::new(),
+            cached_entries: Vec::new(),
+            loader: Default::default(),
+            loading: false,
+            operation: None,
+            storage_cache: Default::default(),
             view_mode: ViewMode::List,
             sort_by: SortBy::Name,
             sort_order: SortOrder::Ascending,
@@ -85,17 +95,49 @@ impl FileManager {
     fn load_entries(&mut self) {
         self.selected_entries.clear();
 
-        match load_directory_entries(&self.current_path, self.show_hidden, &self.selected_entries) {
-            Ok(mut entries) => {
-                sort_entries(&mut entries, &self.sort_by, &self.sort_order);
-                filter_entries(&mut entries, &self.search_query);
-                self.entries = entries;
-            }
-            Err(e) => {
-                self.error_message = Some(format!("Failed to load directory: {}", e));
-                self.entries.clear();
+        self.entries.clear();
+        self.cached_entries.clear();
+        self.loading = true;
+        self.loader
+            .request(self.current_path.clone(), self.show_hidden);
+    }
+
+    fn poll_directory(&mut self) {
+        if let Some(result) = self.loader.poll() {
+            self.loading = false;
+            match result {
+                Ok(entries) => {
+                    self.cached_entries = entries;
+                    self.apply_filter();
+                }
+                Err(e) => self.error_message = Some(format!("Failed to load directory: {e:#}")),
             }
         }
+    }
+
+    fn poll_operation(&mut self) {
+        if let Some(job) = &self.operation {
+            if let Some(result) = job.poll() {
+                if result.is_ok() && job.clears_cut_clipboard {
+                    self.clipboard.clear();
+                    self.clipboard_operation = None;
+                }
+                if let Err(error) = result {
+                    self.error_message = Some(format!("File operation failed: {error:#}"));
+                }
+                self.operation = None;
+                self.load_entries();
+            }
+        }
+    }
+
+    fn apply_filter(&mut self) {
+        self.entries = self.cached_entries.clone();
+        filter_entries(&mut self.entries, &self.search_query);
+        for entry in &mut self.entries {
+            entry.selected = self.selected_entries.contains(&entry.path);
+        }
+        sort_entries(&mut self.entries, &self.sort_by, &self.sort_order);
     }
 
     /// Navigate to a new directory.
@@ -230,4 +272,30 @@ impl FileManager {
     }
 
     // Handle keyboard shortcuts.
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn search_uses_cached_entries_and_preserves_selection() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Notes.txt");
+        std::fs::write(&path, "test").unwrap();
+        let mut app = FileManager::new(dir.path().into());
+        app.cached_entries =
+            fyle::core::load_directory_entries(dir.path(), true, &HashSet::new()).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        app.selected_entries.insert(path.clone());
+        app.search_query = "NOTES".into();
+        app.apply_filter();
+        assert_eq!(app.entries.len(), 1);
+        assert!(app.entries[0].selected);
+        app.search_query = "missing".into();
+        app.apply_filter();
+        assert!(app.entries.is_empty());
+        app.search_query.clear();
+        app.apply_filter();
+        assert_eq!(app.entries[0].path, path);
+    }
 }

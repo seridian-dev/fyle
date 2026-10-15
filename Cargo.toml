@@ -1,17 +1,17 @@
 [package]
 name = "fyle"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
-description = "A cyberpunk-themed file manager with embedded icon font"
+description = "A responsive desktop file manager with a testable Rust core"
 authors = ["Fyle Team"]
 license = "MIT"
-repository = "https://github.com/4cecoder/fyle"
+repository = "https://github.com/seridian-dev/fyle"
 default-run = "fyle"
 keywords = ["file-manager", "gui", "egui", "cyberpunk", "icons"]
 categories = ["filesystem", "gui"]
 
 [features]
-default = ["gui"]
+default = ["gui", "trash"]
 gui = ["dep:eframe", "dep:egui", "dep:sysinfo"]
 trash = ["dep:trash"]
 

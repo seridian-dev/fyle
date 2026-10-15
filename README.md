@@ -1,5 +1,9 @@
 # Fyle
 
+[![CI](https://github.com/seridian-dev/fyle/actions/workflows/ci.yml/badge.svg)](https://github.com/seridian-dev/fyle/actions/workflows/ci.yml)
+
+A [Seridian](https://github.com/seridian-dev) open-source project.
+
 An MIT-licensed Rust file manager with a cyberpunk egui interface. Browse,
 filter, sort, bookmark, copy, move, rename and delete local files.
 
@@ -60,10 +64,34 @@ and rendering have separate modules. See [architecture](docs/architecture.md)
 and the [TDD workflow](CONTRIBUTING.md). CI checks Linux/macOS/Windows core tests
 and Linux full-feature tests, formatting, Clippy and desktop entry validation.
 
+## Safety and responsiveness
+
+Default builds move deleted files to Trash. A trash failure is reported and
+never falls back to permanent deletion. To deliberately build without Trash,
+use `cargo build --no-default-features --features gui`; its confirmation says
+“Delete Permanently.”
+
+Creating a file uses exclusive creation. Copy, move and rename reject existing
+destinations. Batch copy/move checks predictable collisions before starting.
+Names must be a single component; recursive self-copy, symlinks and special
+files are rejected by copy/move instead of followed implicitly. Cross-device
+moves currently return an error and preserve the source.
+
+These operations are not transactions: disk errors can leave a partly completed
+batch. Rename/move destination checks are not atomic against another program
+changing the same paths concurrently. Reopen/refresh the folder after an error.
+
+Directory scans and file mutations run off the UI thread. One mutation runs at
+a time per window, and normal window close waits for it to finish. A stale scan
+cannot replace a newer folder. Search uses cached entries; F5 refreshes from disk.
+List/grid views build visible rows only, disk usage is cached for five seconds,
+and case-insensitive name sorting caches keys once per entry.
+
+The automated 10,000-entry rendering test builds fewer than 100 entries for a
+1024×768 viewport. See [performance evidence](docs/performance.md).
+
 Bookmarks retain their legacy location: the OS config directory followed by
-`cyberpunk_fm/bookmarks.json`. The GUI Delete action permanently deletes files. The optional `trash` feature
-exposes a library API for moving files to trash; the GUI does not yet use it.
-The clipboard currently works within Fyle.
+`cyberpunk_fm/bookmarks.json`. The clipboard currently works within Fyle.
 
 ## License
 

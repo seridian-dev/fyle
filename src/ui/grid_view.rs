@@ -9,6 +9,8 @@ use eframe::egui::{self, RichText, Sense, Stroke, Ui};
 
 /// Render a single grid item.
 fn render_grid_item(ui: &mut Ui, entry: &FileEntry) -> Option<ViewAction> {
+    #[cfg(test)]
+    crate::ui::RENDERED_ENTRIES.with(|count| count.set(count.get() + 1));
     let mut action = None;
     let name_color = get_entry_color(entry.is_dir);
     let bg_color = get_selection_bg_color(entry.selected);
@@ -98,17 +100,17 @@ fn render_grid_item(ui: &mut Ui, entry: &FileEntry) -> Option<ViewAction> {
 pub fn render_grid_view(ui: &mut Ui, entries: &[FileEntry]) -> Vec<ViewAction> {
     let mut actions = Vec::new();
 
+    let items_per_row = (ui.available_width() / GRID_ITEM_WIDTH).floor().max(1.0) as usize;
+    let total_rows = entries.len().div_ceil(items_per_row);
     egui::ScrollArea::vertical()
+        .id_source("file_grid_scroll")
         .auto_shrink([false, false])
-        .max_height(ui.available_height())
-        .show(ui, |ui| {
-            let available_width = ui.available_width();
-            let items_per_row = (available_width / GRID_ITEM_WIDTH).floor().max(1.0) as usize;
-
-            // Iterate in chunks to create rows
-            for chunk in entries.chunks(items_per_row) {
+        .show_rows(ui, GRID_ITEM_HEIGHT, total_rows, |ui, rows| {
+            for row in rows {
+                let start = row * items_per_row;
+                let end = (start + items_per_row).min(entries.len());
                 ui.horizontal(|ui| {
-                    for entry in chunk {
+                    for entry in &entries[start..end] {
                         if let Some(action) = render_grid_item(ui, entry) {
                             actions.push(action);
                         }
@@ -116,6 +118,5 @@ pub fn render_grid_view(ui: &mut Ui, entries: &[FileEntry]) -> Vec<ViewAction> {
                 });
             }
         });
-
     actions
 }

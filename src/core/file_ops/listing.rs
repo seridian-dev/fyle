@@ -96,6 +96,16 @@ pub fn load_directory_entries(
 
 /// Sort file entries according to the specified criteria.
 pub fn sort_entries(entries: &mut [FileEntry], sort_by: &SortBy, sort_order: &SortOrder) {
+    if *sort_by == SortBy::Name {
+        if *sort_order == SortOrder::Ascending {
+            entries.sort_by_cached_key(|entry| (!entry.is_dir, entry.name.to_lowercase()));
+        } else {
+            entries.sort_by_cached_key(|entry| {
+                (!entry.is_dir, std::cmp::Reverse(entry.name.to_lowercase()))
+            });
+        }
+        return;
+    }
     entries.sort_by(|a, b| {
         // Directories always come first
         let dir_ordering = match (a.is_dir, b.is_dir) {

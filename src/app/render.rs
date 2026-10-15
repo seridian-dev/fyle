@@ -2,6 +2,9 @@ use super::*;
 
 impl FileManager {
     pub(super) fn show_dialogs(&mut self, ctx: &egui::Context) {
+        if self.operation.is_some() {
+            return;
+        }
         let result = match &self.dialog {
             DialogType::None => return,
             DialogType::ConfirmDelete(paths) => show_delete_dialog(ctx, paths),
@@ -32,20 +35,13 @@ impl FileManager {
                 self.dialog = DialogType::None;
                 self.rename_state = None;
             }
-            DialogResult::Success => {
+            DialogResult::Execute(operation) => {
+                self.context_menu.hide();
+                self.operation = Some(fyle::core::job::OperationJob::start(operation));
                 self.dialog = DialogType::None;
                 self.rename_state = None;
-                // Clear clipboard after successful move
-                if matches!(self.clipboard_operation, Some(ClipboardOperation::Cut)) {
-                    self.clipboard.clear();
-                    self.clipboard_operation = None;
-                }
-                self.load_entries();
-            }
-            DialogResult::Error(msg) => {
-                self.error_message = Some(msg);
-                self.dialog = DialogType::None;
-                self.rename_state = None;
+                self.create_folder_state.name.clear();
+                self.create_file_state.name.clear();
             }
         }
     }
@@ -62,7 +58,12 @@ impl FileManager {
     fn render_details_panel(&self, ui: &mut egui::Ui) {
         ui.heading("File Details");
 
-        if let Some(selected) = self.entries.iter().find(|e| e.selected) {
+        if let Some(selected) = self
+            .selected_entries
+            .iter()
+            .next()
+            .and_then(|path| self.entries.iter().find(|entry| &entry.path == path))
+        {
             egui::Grid::new("details_grid")
                 .num_columns(2)
                 .spacing([10.0, 4.0])
@@ -95,13 +96,27 @@ impl FileManager {
 
 impl eframe::App for FileManager {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.operation.is_some() && ctx.input(|i| i.viewport().close_requested()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.error_message = Some(
+                "Please wait for the current file operation to finish before closing Fyle.".into(),
+            );
+        }
+        self.poll_directory();
+        self.poll_operation();
+        if self.loading || self.operation.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        }
         // Handle keyboard shortcuts
-        self.handle_keyboard(ctx);
+        if self.operation.is_none() {
+            self.handle_keyboard(ctx);
+        }
 
         // Show error messages
         self.show_error(ctx);
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            ui.set_enabled(self.operation.is_none());
             let can_go_back = !self.history.is_empty();
             let can_go_forward = !self.forward_history.is_empty();
 
@@ -121,34 +136,61 @@ impl eframe::App for FileManager {
 
         // Sidebar
         egui::SidePanel::left("sidebar").show(ctx, |ui| {
-            if let Some(action) = render_sidebar(ui, &self.bookmarks, &self.current_path) {
+            ui.set_enabled(self.operation.is_none());
+            if let Some(action) = render_sidebar(
+                ui,
+                &self.bookmarks,
+                &self.current_path,
+                &mut self.storage_cache,
+            ) {
                 self.handle_sidebar_action(action);
             }
         });
 
         // Bottom details panel
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
+            ui.set_enabled(self.operation.is_none());
             self.render_details_panel(ui);
         });
 
         // Main content area
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Files");
+            ui.set_enabled(self.operation.is_none());
+            ui.horizontal(|ui| {
+                ui.heading("Files");
+                if self.operation.is_some() {
+                    ui.spinner();
+                    ui.label("Working…");
+                }
+                ui.label(format!(
+                    "{} items · {} selected",
+                    self.entries.len(),
+                    self.selected_entries.len()
+                ));
+                if self.loading {
+                    ui.spinner();
+                    ui.label("Loading folder…");
+                }
+            });
+            if !self.loading && self.entries.is_empty() {
+                ui.label(if self.search_query.is_empty() {
+                    "This folder is empty."
+                } else {
+                    "No files match your search."
+                });
+            }
 
             // Bulk operations toolbar
             if let Some(action) = render_bulk_operations(ui, self.selected_entries.len()) {
                 self.handle_bulk_action(action);
             }
 
-            // Clone entries to avoid borrow issues
-            let entries_snapshot = self.entries.clone();
-
             // Render the appropriate view and collect actions
             let actions = match self.view_mode {
                 ViewMode::List => {
-                    render_list_view(ui, &entries_snapshot, &self.sort_by, &self.sort_order)
+                    render_list_view(ui, &self.entries, &self.sort_by, &self.sort_order)
                 }
-                ViewMode::Grid => render_grid_view(ui, &entries_snapshot),
+                ViewMode::Grid => render_grid_view(ui, &self.entries),
             };
 
             // Handle view actions

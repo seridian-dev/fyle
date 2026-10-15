@@ -1,8 +1,13 @@
 //! Dialog components for file operations.
 
-use crate::core::{
-    copy_files, create_directory, create_file, delete_files, format_size, move_files, rename_file,
+use crate::core::{format_size, job::FileOperation};
+
+const DELETE_LABEL: &str = if cfg!(feature = "trash") {
+    "Move to Trash"
+} else {
+    "Delete Permanently"
 };
+
 use crate::theme::colors;
 use crate::types::FileEntry;
 
@@ -18,9 +23,7 @@ pub enum DialogResult {
     /// Dialog was closed/cancelled.
     Closed,
     /// Operation completed successfully.
-    Success,
-    /// Operation failed with error message.
-    Error(String),
+    Execute(FileOperation),
 }
 
 /// Show the delete confirmation dialog.
@@ -28,17 +31,14 @@ pub fn show_delete_dialog(ctx: &Context, paths: &[PathBuf]) -> DialogResult {
     let mut result = DialogResult::Open;
     let mut open = true;
 
-    egui::Window::new("Confirm Delete")
+    egui::Window::new(DELETE_LABEL)
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
         .show(ctx, |ui| {
             ui.label(
-                RichText::new(format!(
-                    "Are you sure you want to delete {} item(s)?",
-                    paths.len()
-                ))
-                .color(colors::AMBER),
+                RichText::new(format!("{} {} item(s)?", DELETE_LABEL, paths.len()))
+                    .color(colors::AMBER),
             );
 
             ui.add_space(8.0);
@@ -57,13 +57,10 @@ pub fn show_delete_dialog(ctx: &Context, paths: &[PathBuf]) -> DialogResult {
 
             ui.horizontal(|ui| {
                 if ui
-                    .button(RichText::new("Delete").color(colors::CRIMSON))
+                    .button(RichText::new(DELETE_LABEL).color(colors::CRIMSON))
                     .clicked()
                 {
-                    match delete_files(paths) {
-                        Ok(()) => result = DialogResult::Success,
-                        Err(e) => result = DialogResult::Error(format!("Delete failed: {}", e)),
-                    }
+                    result = DialogResult::Execute(FileOperation::Remove(paths.to_vec()));
                 }
                 if ui.button("Cancel").clicked() {
                     result = DialogResult::Closed;
@@ -113,10 +110,10 @@ pub fn show_copy_dialog(ctx: &Context, sources: &[PathBuf], destination: &Path) 
                     .button(RichText::new("Copy").color(colors::CYBER_GREEN))
                     .clicked()
                 {
-                    match copy_files(sources, destination) {
-                        Ok(()) => result = DialogResult::Success,
-                        Err(e) => result = DialogResult::Error(format!("Copy failed: {}", e)),
-                    }
+                    result = DialogResult::Execute(FileOperation::Copy(
+                        sources.to_vec(),
+                        destination.to_path_buf(),
+                    ));
                 }
                 if ui.button("Cancel").clicked() {
                     result = DialogResult::Closed;
@@ -166,10 +163,10 @@ pub fn show_move_dialog(ctx: &Context, sources: &[PathBuf], destination: &Path) 
                     .button(RichText::new("Move").color(colors::AMBER))
                     .clicked()
                 {
-                    match move_files(sources, destination) {
-                        Ok(()) => result = DialogResult::Success,
-                        Err(e) => result = DialogResult::Error(format!("Move failed: {}", e)),
-                    }
+                    result = DialogResult::Execute(FileOperation::Move(
+                        sources.to_vec(),
+                        destination.to_path_buf(),
+                    ));
                 }
                 if ui.button("Cancel").clicked() {
                     result = DialogResult::Closed;
@@ -272,15 +269,10 @@ pub fn show_create_folder_dialog(
                 && ui.input(|i| i.key_pressed(egui::Key::Enter))
                 && !state.name.is_empty()
             {
-                match create_directory(current_path, &state.name) {
-                    Ok(_) => {
-                        state.name.clear();
-                        result = DialogResult::Success;
-                    }
-                    Err(e) => {
-                        result = DialogResult::Error(format!("Failed to create folder: {}", e))
-                    }
-                }
+                result = DialogResult::Execute(FileOperation::CreateFolder(
+                    current_path.to_path_buf(),
+                    state.name.clone(),
+                ));
             }
 
             ui.add_space(8.0);
@@ -293,15 +285,10 @@ pub fn show_create_folder_dialog(
                     .clicked()
                     && !state.name.is_empty()
                 {
-                    match create_directory(current_path, &state.name) {
-                        Ok(_) => {
-                            state.name.clear();
-                            result = DialogResult::Success;
-                        }
-                        Err(e) => {
-                            result = DialogResult::Error(format!("Failed to create folder: {}", e))
-                        }
-                    }
+                    result = DialogResult::Execute(FileOperation::CreateFolder(
+                        current_path.to_path_buf(),
+                        state.name.clone(),
+                    ));
                 }
                 if ui.button("Cancel").clicked() {
                     state.name.clear();
@@ -346,13 +333,10 @@ pub fn show_create_file_dialog(
                 && ui.input(|i| i.key_pressed(egui::Key::Enter))
                 && !state.name.is_empty()
             {
-                match create_file(current_path, &state.name) {
-                    Ok(_) => {
-                        state.name.clear();
-                        result = DialogResult::Success;
-                    }
-                    Err(e) => result = DialogResult::Error(format!("Failed to create file: {}", e)),
-                }
+                result = DialogResult::Execute(FileOperation::CreateFile(
+                    current_path.to_path_buf(),
+                    state.name.clone(),
+                ));
             }
 
             ui.add_space(8.0);
@@ -365,15 +349,10 @@ pub fn show_create_file_dialog(
                     .clicked()
                     && !state.name.is_empty()
                 {
-                    match create_file(current_path, &state.name) {
-                        Ok(_) => {
-                            state.name.clear();
-                            result = DialogResult::Success;
-                        }
-                        Err(e) => {
-                            result = DialogResult::Error(format!("Failed to create file: {}", e))
-                        }
-                    }
+                    result = DialogResult::Execute(FileOperation::CreateFile(
+                        current_path.to_path_buf(),
+                        state.name.clone(),
+                    ));
                 }
                 if ui.button("Cancel").clicked() {
                     state.name.clear();
@@ -427,10 +406,10 @@ pub fn show_rename_dialog(
                 && !state.new_name.is_empty()
                 && state.new_name != old_name
             {
-                match rename_file(old_path, &state.new_name) {
-                    Ok(_) => result = DialogResult::Success,
-                    Err(e) => result = DialogResult::Error(format!("Rename failed: {}", e)),
-                }
+                result = DialogResult::Execute(FileOperation::Rename(
+                    old_path.to_path_buf(),
+                    state.new_name.clone(),
+                ));
             }
 
             ui.add_space(8.0);
@@ -447,10 +426,10 @@ pub fn show_rename_dialog(
                     )
                     .clicked()
                 {
-                    match rename_file(old_path, &state.new_name) {
-                        Ok(_) => result = DialogResult::Success,
-                        Err(e) => result = DialogResult::Error(format!("Rename failed: {}", e)),
-                    }
+                    result = DialogResult::Execute(FileOperation::Rename(
+                        old_path.to_path_buf(),
+                        state.new_name.clone(),
+                    ));
                 }
                 if ui.button("Cancel").clicked() {
                     result = DialogResult::Closed;

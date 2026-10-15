@@ -301,8 +301,7 @@ pub struct StorageInfo {
 /// Get storage information for all disks.
 #[must_use]
 pub fn get_storage_info() -> Vec<StorageInfo> {
-    let mut disks = Disks::new_with_refreshed_list();
-    disks.refresh();
+    let disks = Disks::new_with_refreshed_list();
 
     disks
         .list()
@@ -349,14 +348,33 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
+/// Disk probes are expensive; refresh at most once every five seconds.
+#[derive(Default)]
+pub struct StorageCache {
+    refreshed: Option<std::time::Instant>,
+    entries: Vec<StorageInfo>,
+}
+impl StorageCache {
+    fn entries(&mut self) -> &[StorageInfo] {
+        if self
+            .refreshed
+            .is_none_or(|last| last.elapsed() >= std::time::Duration::from_secs(5))
+        {
+            self.entries = get_storage_info();
+            self.refreshed = Some(std::time::Instant::now());
+        }
+        &self.entries
+    }
+}
+
 /// Render storage section.
-pub fn render_storage(ui: &mut Ui) {
+pub fn render_storage(ui: &mut Ui, cache: &mut StorageCache) {
     ui.add_space(4.0);
 
     render_section_header(ui, "Storage", "💾", colors::MAGENTA, |ui| {
         ui.add_space(4.0);
 
-        for info in get_storage_info() {
+        for info in cache.entries() {
             // Disk name
             ui.label(
                 RichText::new(&info.name)
@@ -431,6 +449,7 @@ pub fn render_sidebar(
     ui: &mut Ui,
     bookmarks: &[Bookmark],
     current_path: &PathBuf,
+    storage_cache: &mut StorageCache,
 ) -> Option<SidebarAction> {
     // Sidebar header
     ui.add_space(8.0);
@@ -468,7 +487,7 @@ pub fn render_sidebar(
     ui.add_space(4.0);
 
     // Storage
-    render_storage(ui);
+    render_storage(ui, storage_cache);
 
     action
 }

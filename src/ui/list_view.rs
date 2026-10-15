@@ -21,6 +21,9 @@ fn render_header(ui: &mut Ui, current_sort: &SortBy, sort_order: &SortOrder) -> 
         }
     };
 
+    ui.label("");
+    ui.label("");
+
     // Name column header
     let name_text = format!("Name{}", sort_indicator(*current_sort == SortBy::Name));
     if ui
@@ -75,6 +78,8 @@ fn render_header(ui: &mut Ui, current_sort: &SortBy, sort_order: &SortOrder) -> 
 
 /// Render a single file entry row.
 fn render_entry_row(ui: &mut Ui, entry: &FileEntry, selected: bool) -> Option<ViewAction> {
+    #[cfg(test)]
+    crate::ui::RENDERED_ENTRIES.with(|count| count.set(count.get() + 1));
     let mut action = None;
     let name_color = get_entry_color(entry.is_dir);
 
@@ -88,8 +93,11 @@ fn render_entry_row(ui: &mut Ui, entry: &FileEntry, selected: bool) -> Option<Vi
     ui.label(get_file_icon(entry));
 
     // File name with click handling
-    let name_response = ui
-        .add(egui::Label::new(RichText::new(&entry.name).color(name_color)).sense(Sense::click()));
+    let name_response = ui.add(
+        egui::Label::new(RichText::new(&entry.name).color(name_color))
+            .truncate(true)
+            .sense(Sense::click()),
+    );
 
     // Double-click to navigate or open
     if name_response.double_clicked() {
@@ -137,29 +145,29 @@ pub fn render_list_view(
     sort_order: &SortOrder,
 ) -> Vec<ViewAction> {
     let mut actions = Vec::new();
-    let available_height = ui.available_height();
-
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .max_height(available_height)
+    egui::Grid::new("file_list_header")
+        .min_col_width(100.0)
         .show(ui, |ui| {
+            if let Some(sort_by) = render_header(ui, current_sort, sort_order) {
+                actions.push(ViewAction::ChangeSort(sort_by));
+            }
+        });
+    egui::ScrollArea::vertical()
+        .id_source("file_list_scroll")
+        .auto_shrink([false, false])
+        .show_rows(ui, 24.0, entries.len(), |ui, rows| {
             egui::Grid::new("file_list")
                 .striped(true)
                 .min_col_width(100.0)
+                .min_row_height(24.0)
                 .show(ui, |ui| {
-                    // Render header
-                    if let Some(sort_by) = render_header(ui, current_sort, sort_order) {
-                        actions.push(ViewAction::ChangeSort(sort_by));
-                    }
-
-                    // Render entries
-                    for entry in entries {
+                    for index in rows {
+                        let entry = &entries[index];
                         if let Some(action) = render_entry_row(ui, entry, entry.selected) {
                             actions.push(action);
                         }
                     }
                 });
         });
-
     actions
 }
