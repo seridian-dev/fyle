@@ -3,13 +3,17 @@ use super::*;
 impl FileManager {
     pub(super) fn handle_keyboard(&mut self, ctx: &egui::Context) {
         if self.dialog == DialogType::None
+            && !self.appearance_open
             && !self.palette.open
+            && !self.location_open
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::F))
         {
             ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("file_search")));
             return;
         }
         if self.dialog == DialogType::None
+            && !self.appearance_open
+            && !self.location_open
             && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::P))
         {
             if self.palette.open {
@@ -19,7 +23,30 @@ impl FileManager {
             }
             return;
         }
-        if self.palette.open || self.dialog != DialogType::None || ctx.wants_keyboard_input() {
+        if self.dialog == DialogType::None
+            && !self.appearance_open
+            && !self.palette.open
+            && !self.location_open
+        {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::L)) {
+                self.open_location();
+                return;
+            }
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::T)) {
+                self.new_tab();
+                return;
+            }
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::W)) {
+                self.close_tab(self.active_tab);
+                return;
+            }
+        }
+        if self.appearance_open
+            || self.location_open
+            || self.palette.open
+            || self.dialog != DialogType::None
+            || ctx.wants_keyboard_input()
+        {
             return;
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space)) {
@@ -33,11 +60,6 @@ impl FileManager {
         // Ctrl+G - Grid view
         if ctx.input(|i| i.key_pressed(egui::Key::G) && i.modifiers.ctrl) {
             self.view_mode = ViewMode::Grid;
-        }
-
-        // Ctrl+L - List view
-        if ctx.input(|i| i.key_pressed(egui::Key::L) && i.modifiers.ctrl) {
-            self.view_mode = ViewMode::List;
         }
 
         // Ctrl+A - Select all
@@ -82,7 +104,7 @@ impl FileManager {
         }
 
         // Ctrl+T - Open terminal
-        if ctx.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl) {
+        if ctx.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl && i.modifiers.alt) {
             if let Err(e) = open_terminal(&self.current_path) {
                 self.error_message = Some(e.to_string());
             }
@@ -105,6 +127,9 @@ impl FileManager {
     /// Handle toolbar actions.
     pub(super) fn handle_toolbar_action(&mut self, action: ToolbarAction) {
         match action {
+            ToolbarAction::Navigate(path) => self.navigate_to(path),
+            ToolbarAction::Appearance => self.appearance_open = true,
+            ToolbarAction::Location => self.open_location(),
             ToolbarAction::GoBack => self.go_back(),
             ToolbarAction::Refresh => self.load_entries(),
             ToolbarAction::Jump => self.open_palette(),

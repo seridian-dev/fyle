@@ -133,3 +133,35 @@ on selection/visibility changes discards stale replies. Worker I/O is not forcib
 cancelled. The GUI shows loading/unsupported/error states rather than blocking
 rendering. Harness state includes palette/query/preview status and bounded preview
 text, so the actual interaction is inspectable by an explicitly attached agent.
+
+## Browsing workspace and vector UI
+
+`app/workspace.rs` owns session-local tab snapshots and location entry. Switching
+saves navigation/query/view policy, restores a snapshot and asks the existing
+single directory worker for a fresh generation. Inactive tabs do not own worker
+threads or directory caches. Selection is cleared and preview generations are
+invalidated; clipboard remains shared within the window. The last tab cannot be
+closed and the tab count is capped at 24. Mutation and file-dialog guards prevent
+switching context during an operation or confirmation.
+
+Workspace Ctrl+Tab chords are consumed in raw input before egui focus traversal.
+Processing them only during rendering can leave an old focus ID in the native
+accessibility tree when tab content disappears. Custom vector buttons, file rows,
+cards and sidebar items provide labeled widget metadata for accessibility.
+`ui/icons.rs` draws a shared vector set without fonts or raster assets. Visible-row
+virtualization remains in both views; a geometry regression also verifies that
+adjacent card hit targets do not overlap.
+
+## Appearance and GPU boundaries
+
+`appearance.rs` is a headless, version-tolerant settings model/store. Defaults
+preserve the original neon palette; numeric settings are clamped and malformed or
+oversized files report errors. Saves use an exclusive temporary file and rename.
+`theme/palette.rs` owns semantic colors, `theme/mod.rs` applies styles/preferences,
+`theme/shaders/` owns GLSL and `theme/shader.rs` owns GL compilation, a single
+fullscreen-triangle callback and explicit shutdown cleanup. GL calls run only with
+eframe's context current. Compilation errors retain a static background.
+`app/appearance.rs` owns live settings interactions and persistence requests.
+Animation is capped at 20 FPS, runs only while focused and is frozen in automation
+sessions. Effects/motion can be disabled independently; UI scale and highlight
+changes do not replace the original file-category colors.

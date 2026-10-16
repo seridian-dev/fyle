@@ -72,8 +72,11 @@ impl FileManager {
             "inputs":{"new_folder_name":self.create_folder_state.name,"new_file_name":self.create_file_state.name,"rename_name":self.rename_state.as_ref().map(|state| &state.new_name)}, "loading":self.loading,
             "busy":self.operation.is_some(), "ready":!self.loading && self.operation.is_none() && !self.preview_loading,
             "query_error":self.query_error,
+            "appearance":{"open":self.appearance_open,"settings":self.appearance,"shader_available":self.shader.is_some(),"shader_error":self.shader_error},
+            "tabs":{"active":self.active_tab,"items":self.tabs.iter().enumerate().map(|(index,tab)|json!({"path":if index==self.active_tab {&self.current_path}else{&tab.path},"query":if index==self.active_tab {&self.search_query}else{&tab.query}})).collect::<Vec<_>>()},
+            "location":{"open":self.location_open,"input":self.location_input,"error":self.location_error},
             "palette":{"open":self.palette.open,"query":self.palette.query},
-            "preview":{"open":self.preview_open,"loading":self.preview_loading,"path":self.preview_path,"kind":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {..}))=>"text",Some(Ok(_))=>"unsupported",Some(Err(_))=>"error",None=>"none" },"text":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {text,..}))=>Some(text),_=>None }},
+            "preview":{"open":self.preview_open,"wrap":self.preview_wrap,"loading":self.preview_loading,"path":self.preview_path,"kind":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {..}))=>"text",Some(Ok(_))=>"unsupported",Some(Err(_))=>"error",None=>"none" },"text":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {text,..}))=>Some(text),_=>None }},
             "dialog": match &self.dialog { DialogType::None => "none", DialogType::ConfirmDelete(..) => "confirm_delete", DialogType::ConfirmCopy(..) => "confirm_copy", DialogType::ConfirmMove(..) => "confirm_move", DialogType::FileProperties(..) => "properties", DialogType::CreateFolder => "create_folder", DialogType::CreateFile => "create_file", DialogType::Rename(..) => "rename" }, "error":self.error_message,
             "total_entries":self.entries.len(), "entry_offset":offset, "entries":entries,
             "selected_count":self.selected_entries.len(), "can_go_back":!self.history.is_empty(), "can_go_forward":!self.forward_history.is_empty(),
@@ -204,6 +207,11 @@ impl FileManager {
                     self.select_single(&path);
                 }
             }
+            "appearance" => self.appearance_open = true,
+            "new_tab" => self.new_tab(),
+            "switch_tab" => self.switch_tab(text("name")?.parse()?),
+            "close_tab" => self.close_tab(self.active_tab),
+            "location" => self.open_location(),
             "palette" => self.open_palette(),
             "peek" => self.preview_open = !self.preview_open,
             "new_folder" => self.dialog = DialogType::CreateFolder,
@@ -211,6 +219,8 @@ impl FileManager {
             "dismiss_error" => self.error_message = None,
             "cancel" => {
                 self.palette.open = false;
+                self.location_open = false;
+                self.appearance_open = false;
                 self.dialog = DialogType::None;
                 self.rename_state = None;
                 self.context_menu.hide();

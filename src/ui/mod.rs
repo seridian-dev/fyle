@@ -3,6 +3,7 @@
 pub mod context_menu;
 pub mod dialogs;
 pub mod grid_view;
+pub mod icons;
 pub mod list_view;
 pub mod sidebar;
 pub mod toolbar;
@@ -28,32 +29,8 @@ pub fn truncate_name(name: &str, max_len: usize) -> String {
 
 /// UI constants for consistent sizing.
 pub mod constants {
-    /// Width of grid items.
-    pub const GRID_ITEM_WIDTH: f32 = 130.0;
-
-    /// Height of grid items.
-    pub const GRID_ITEM_HEIGHT: f32 = 120.0;
-
-    /// Inner width of grid item content.
-    pub const GRID_ITEM_INNER_WIDTH: f32 = 100.0;
-
-    /// Inner height of grid item content.
-    pub const GRID_ITEM_INNER_HEIGHT: f32 = 100.0;
-
     /// Context menu width.
     pub const CONTEXT_MENU_WIDTH: f32 = 200.0;
-
-    /// Maximum characters for truncated names.
-    pub const MAX_NAME_LENGTH: usize = 20;
-
-    /// Icon size for grid view.
-    pub const GRID_ICON_SIZE: f32 = 32.0;
-
-    /// Font size for grid item names.
-    pub const GRID_NAME_SIZE: f32 = 12.0;
-
-    /// Font size for grid item details.
-    pub const GRID_DETAIL_SIZE: f32 = 10.0;
 }
 
 /// Actions that can be triggered from file views.

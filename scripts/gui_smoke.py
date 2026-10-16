@@ -2,6 +2,7 @@
 """Exercise real egui input and capture PNG/JSON evidence in an agent-owned session."""
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -17,10 +18,11 @@ def main():
         raise SystemExit("Use a new or empty artifact directory")
     cli = str(args.cli.resolve())
     session = None
+    run_env = os.environ.copy()
 
     def run(*arguments):
         result = subprocess.run([cli, 'gui', *map(str, arguments)],
-                                capture_output=True, text=True, timeout=30)
+                                capture_output=True, text=True, timeout=30, env=run_env)
         if result.returncode:
             raise RuntimeError(f"GUI command failed: {arguments}\n{result.stderr}")
         return json.loads(result.stdout)
@@ -53,6 +55,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix='fyle-gui-fixture-') as temporary:
         fixture = Path(temporary)
+        run_env['FYLE_SETTINGS_DIR'] = str(fixture / '.appearance-fixture')
         (fixture / 'alpha.txt').write_text('fixture alpha')
         (fixture / 'beta.txt').write_text('fixture beta')
         (fixture / 'folder').mkdir()
@@ -75,6 +78,8 @@ def main():
             assert state['query'] == ''
             state = click('grid')
             assert state['view'] == 'grid'
+            state = click('entry:alpha.txt')
+            assert next(entry for entry in state['entries'] if entry['name']=='alpha.txt')['selected']
             capture('03-grid')
             request('action', 'new_folder')
             state = click('dialog_name')
@@ -125,13 +130,56 @@ def main():
             request('key', '--key', 'Ctrl+F')
             state = request('text', '--text', 'alpha')
             assert state['query'] == 'alpha'
+            request('key', '--key', 'Ctrl+T')
+            state = request('wait')
+            assert len(state['tabs']['items']) == 2 and state['tabs']['active'] == 1
+            request('action', 'navigate', '--path', fixture / 'folder')
+            request('wait')
+            click('tab:0')
+            state = request('wait')
+            assert Path(state['path']) == fixture and state['query'] == 'alpha'
+            click('tab:1')
+            state = request('wait')
+            assert Path(state['path']) == fixture / 'folder'
+            request('key', '--key', 'Ctrl+L')
+            state = request('key', '--key', 'Ctrl+A')
+            request('text', '--text', '..')
+            request('key', '--key', 'Enter')
+            state = request('wait')
+            assert Path(state['path']) == fixture and not state['location']['open']
+            request('action', 'search', '--query', '')
+            request('action', 'view', '--mode', 'grid')
+            request('key', '--key', 'Ctrl+Shift+Tab')
+            state = request('wait')
+            assert state['tabs']['active'] == 0 and state['query'] == 'alpha'
+            request('key', '--key', 'Ctrl+Tab')
+            state = request('wait')
+            assert state['tabs']['active'] == 1 and state['query'] == ''
+            capture('09-workspace-tabs')
+            request('key', '--key', 'Ctrl+W')
+            state = request('wait')
+            assert len(state['tabs']['items']) == 1 and state['query'] == 'alpha'
+            assert state['appearance']['shader_available'], state['appearance']['shader_error']
+            request('action', 'appearance')
+            state = click('appearance_effects')
+            assert not state['appearance']['settings']['effects']
+            state = click('appearance_effects')
+            assert state['appearance']['settings']['effects']
+            click('appearance_save')
+            saved = json.loads((fixture / '.appearance-fixture' / 'appearance.json').read_text())
+            assert saved['highlight'] == [0, 212, 255]
+            capture('10-appearance-settings')
+            request('key', '--key', 'Escape')
+
 
             manifest = {'passed': True, 'session': session, 'checks': [
                 'actual renderer PNG capture', 'pixel row selection', 'pixel click and text filtering',
                 'keyboard select-all and backspace', 'pixel grid toggle',
                 'dialog text/Enter and background folder creation', 'navigation and empty state',
                 'composable lenses and invalid query feedback', 'fuzzy file jump and command dispatch',
-                'bounded asynchronous local text preview', 'palette Escape handling'],
+                'bounded asynchronous local text preview', 'palette Escape handling', 'independent tab navigation and filters',
+                'relative location entry and keyboard tab close',
+                'actual OpenGL shader and persisted appearance controls'],
                 'artifacts': sorted(path.name for path in args.output_dir.iterdir())}
             (args.output_dir / 'result.json').write_text(json.dumps(manifest, indent=2))
             print(json.dumps(manifest, indent=2))

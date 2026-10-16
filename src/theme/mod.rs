@@ -3,43 +3,16 @@
 use eframe::egui::{self, Color32, Stroke, Visuals};
 
 /// Cyberpunk color palette.
-pub mod colors {
-    use eframe::egui::Color32;
-
-    /// Electric blue - primary accent color.
-    pub const ELECTRIC_BLUE: Color32 = Color32::from_rgb(0, 212, 255);
-
-    /// Cyber green - secondary accent color.
-    pub const CYBER_GREEN: Color32 = Color32::from_rgb(0, 255, 136);
-
-    /// Magenta - highlight color.
-    pub const MAGENTA: Color32 = Color32::from_rgb(255, 0, 128);
-
-    /// Amber - warning/info color.
-    pub const AMBER: Color32 = Color32::from_rgb(255, 165, 0);
-
-    /// Crimson red - error color.
-    pub const CRIMSON: Color32 = Color32::from_rgb(255, 7, 58);
-
-    /// Cyan - hyperlink color.
-    pub const CYAN: Color32 = Color32::from_rgb(0, 255, 255);
-
-    /// Deep charcoal - panel background.
-    pub const DEEP_CHARCOAL: Color32 = Color32::from_rgb(10, 10, 10);
-
-    /// Dark slate blue - window background.
-    pub const DARK_SLATE: Color32 = Color32::from_rgb(26, 26, 46);
-
-    /// Midnight purple - faint background.
-    pub const MIDNIGHT_PURPLE: Color32 = Color32::from_rgb(22, 33, 62);
-}
+#[path = "palette.rs"]
+pub mod colors;
+pub mod shader;
 
 /// Apply the cyberpunk theme to the egui context.
 pub fn setup_cyberpunk_theme(ctx: &egui::Context) {
     let mut visuals = Visuals::dark();
 
     // Text and backgrounds
-    visuals.override_text_color = Some(Color32::from_rgb(218, 226, 237));
+    visuals.override_text_color = Some(colors::TEXT);
     visuals.panel_fill = colors::DEEP_CHARCOAL;
     visuals.window_fill = colors::DARK_SLATE;
     visuals.faint_bg_color = colors::MIDNIGHT_PURPLE;
@@ -50,10 +23,9 @@ pub fn setup_cyberpunk_theme(ctx: &egui::Context) {
     visuals.widgets.active.bg_fill = colors::ELECTRIC_BLUE.linear_multiply(0.25);
     visuals.widgets.open.bg_fill = colors::CYBER_GREEN.linear_multiply(0.15);
 
-    visuals.widgets.noninteractive.bg_stroke =
-        Stroke::new(1.5_f32, colors::ELECTRIC_BLUE.linear_multiply(0.6));
-    visuals.widgets.hovered.bg_stroke = Stroke::new(2.5_f32, colors::ELECTRIC_BLUE);
-    visuals.widgets.active.bg_stroke = Stroke::new(2.5_f32, colors::MAGENTA);
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, colors::BORDER);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, colors::ELECTRIC_BLUE);
+    visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, colors::ELECTRIC_BLUE);
 
     // Selection colors
     visuals.selection.bg_fill = colors::ELECTRIC_BLUE.linear_multiply(0.35);
@@ -64,7 +36,37 @@ pub fn setup_cyberpunk_theme(ctx: &egui::Context) {
     visuals.error_fg_color = colors::CRIMSON;
     visuals.warn_fg_color = colors::AMBER;
 
+    visuals.window_rounding = egui::Rounding::same(3.0);
+    for widget in [
+        &mut visuals.widgets.inactive,
+        &mut visuals.widgets.hovered,
+        &mut visuals.widgets.active,
+        &mut visuals.widgets.open,
+    ] {
+        widget.rounding = egui::Rounding::same(2.0);
+        widget.fg_stroke.color = colors::TEXT;
+    }
+    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, colors::BORDER);
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, colors::BORDER);
     ctx.set_visuals(visuals);
+    let mut style = (*ctx.style()).clone();
+    style.spacing.item_spacing = egui::vec2(8.0, 6.0);
+    style.spacing.button_padding = egui::vec2(10.0, 6.0);
+    style.spacing.interact_size.y = 30.0;
+    style.spacing.window_margin = egui::Margin::same(16.0);
+    style
+        .text_styles
+        .insert(egui::TextStyle::Body, egui::FontId::proportional(14.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Button, egui::FontId::monospace(12.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Small, egui::FontId::proportional(12.0));
+    style
+        .text_styles
+        .insert(egui::TextStyle::Heading, egui::FontId::monospace(21.0));
+    ctx.set_style(style);
 }
 
 /// Get the appropriate color for a file entry name.
@@ -95,6 +97,23 @@ pub fn get_selection_stroke_color(selected: bool) -> Color32 {
     } else {
         Color32::TRANSPARENT
     }
+}
+
+/// Apply preferences without changing the original semantic file colors.
+pub fn apply_appearance(ctx: &egui::Context, settings: &fyle::appearance::Appearance) {
+    setup_cyberpunk_theme(ctx);
+    ctx.set_zoom_factor(settings.scale);
+    let mut style = (*ctx.style()).clone();
+    let accent = Color32::from_rgb(
+        settings.highlight[0],
+        settings.highlight[1],
+        settings.highlight[2],
+    );
+    style.visuals.selection.bg_fill = accent.linear_multiply(0.28);
+    style.visuals.selection.stroke = Stroke::new(1.0_f32, accent);
+    style.visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, accent);
+    style.visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, accent);
+    ctx.set_style(style);
 }
 
 #[cfg(test)]

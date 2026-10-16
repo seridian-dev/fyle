@@ -4,9 +4,50 @@
 
 A [Seridian](https://github.com/seridian-dev) open-source project.
 
-An MIT-licensed Rust file manager with a cyberpunk egui interface. Browse,
+An MIT-licensed Rust file manager with a cyberpunk control-console interface. Browse,
 filter, sort, bookmark, copy, move, rename and delete local files.
 Free to use, modify and share. No account or hosted service required.
+
+## Browsing workspace (0.9)
+
+A near-black instrument grid, electric cyan controls, amber folders, violet config
+files and mint documents give Fyle a sci-fi console feel. Quick Access and file
+icons are drawn as vectors, so their appearance does not depend on emoji fonts.
+The grid uses full-card targets, angular selection outlines and color-coded file
+categories. Ctrl-click adds/removes selections in either view.
+
+- **Tabs:** `Ctrl+T` duplicates the current location; `Ctrl+Tab` and
+  `Ctrl+Shift+Tab` switch tabs; `Ctrl+W` closes the active tab while keeping at
+  least one open. Tabs independently retain location, filters, view, sorting,
+  hidden-file policy and Back/Forward history. Up to 24 tabs are session-local.
+  Switching refreshes the folder and clears selection; file clipboard stays
+  available across tabs. Tabs do not survive closing the window.
+- **Breadcrumbs:** click a visible path component to navigate. `Ctrl+L` opens
+  location entry, supporting absolute paths, `~/`, relative paths and local
+  file URLs. Enter a file path to visit its parent folder.
+- **Inspector:** Space toggles local peek; Wrap controls long lines. A compact
+  status bar keeps the file viewport steady when selection changes.
+- **Pinned places:** use + beside Pinned to bookmark the current folder;
+  right-click a pin to remove it. Unconfigured OS user directories are disabled
+  in Quick Access. `More` includes New file, Refresh and Open terminal;
+  `Ctrl+Alt+T` also opens the desktop terminal.
+
+### Original palette and OpenGL
+
+The default palette preserves Fyle’s original electric blue `#00D4FF`, cyber green
+`#00FF88`, magenta `#FF0080` and amber `#FFA500`. Open **More → Appearance** to
+preview effect intensity, animation, UI scale and highlight color. **Original
+palette** restores defaults; **Save** persists to the OS config directory under
+`fyle/appearance.json`. `FYLE_SETTINGS_DIR` overrides that directory for isolated
+tests. File-category colors keep the original identity when highlights change.
+
+A real OpenGL shader paints the background field, haze and scanlines behind the
+file viewport. Animated effects repaint at up to 20 FPS while the window is
+focused; disable animation for a static field or disable effects entirely.
+Unsupported shader contexts fall back to the normal background. Agent-owned
+screenshots freeze animation for reproducible inspection. GLSL sources, GL resource
+lifecycle, palette/style, headless settings persistence and settings UI live in
+separate modules.
 
 ## Discovery without an index
 
@@ -148,7 +189,8 @@ python3 scripts/gui_smoke.py --cli target/debug/fyle-cli --output-dir gui-artifa
 
 It uses temporary fixture files, exercises clicks, typing, keys, view switching,
 folder creation/navigation, lenses, fuzzy command/file jumping and local peek.
-It saves eight rendered PNG/state pairs. CI runs it
+It also verifies independent tabs, relative location entry, actual OpenGL shader
+compilation and saved appearance controls, saving ten rendered PNG/state pairs. CI runs it
 under Xvfb/Mesa and uploads the evidence as `gui-state-and-screenshots`.
 See the [agent protocol guide](docs/agent-harness.md).
 

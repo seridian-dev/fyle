@@ -5,3 +5,5 @@ pub mod diagnostics;
 pub mod harness;
 pub mod startup;
 pub mod types;
+
+pub mod appearance;

@@ -1,7 +1,9 @@
 mod actions;
+mod appearance;
 mod automation;
 mod discovery;
 mod render;
+mod workspace;
 use crate::theme::colors;
 use crate::ui::{
     context_menu::{show_context_menu, ContextMenuAction, ContextMenuState},
@@ -30,7 +32,19 @@ use std::path::PathBuf;
 
 pub(crate) struct FileManager {
     automation: Option<automation::Automation>,
+    appearance: fyle::appearance::Appearance,
+    appearance_store: fyle::appearance::SettingsStore,
+    appearance_open: bool,
+    appearance_error: Option<String>,
+    shader: Option<std::sync::Arc<crate::theme::shader::HudShader>>,
+    shader_error: Option<String>,
     current_path: PathBuf,
+    tabs: Vec<workspace::Tab>,
+    active_tab: usize,
+    location_open: bool,
+    location_input: String,
+    location_focus: bool,
+    location_error: Option<String>,
     entries: Vec<FileEntry>,
     cached_entries: Vec<FileEntry>,
     loader: fyle::core::loader::DirectoryLoader,
@@ -45,6 +59,7 @@ pub(crate) struct FileManager {
     query_error: Option<String>,
     palette: discovery::Palette,
     preview_open: bool,
+    preview_wrap: bool,
     preview_path: Option<PathBuf>,
     preview_loader: fyle::core::preview::PreviewLoader,
     preview_loading: bool,
@@ -71,9 +86,26 @@ impl FileManager {
             dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
         };
 
+        let appearance_store = fyle::appearance::SettingsStore::default();
+        let (appearance, appearance_error) = match appearance_store.load() {
+            Ok(settings) => (settings, None),
+            Err(error) => (Default::default(), Some(error.to_string())),
+        };
         let mut app = Self {
             automation: None,
+            appearance,
+            appearance_store,
+            appearance_open: false,
+            appearance_error,
+            shader: None,
+            shader_error: None,
             current_path: current_path.clone(),
+            tabs: Vec::new(),
+            active_tab: 0,
+            location_open: false,
+            location_input: String::new(),
+            location_focus: false,
+            location_error: None,
             entries: Vec::new(),
             cached_entries: Vec::new(),
             loader: Default::default(),
@@ -88,6 +120,7 @@ impl FileManager {
             query_error: None,
             palette: Default::default(),
             preview_open: false,
+            preview_wrap: true,
             preview_path: None,
             preview_loader: Default::default(),
             preview_loading: false,
@@ -105,6 +138,7 @@ impl FileManager {
             history: Vec::new(),
             forward_history: Vec::new(),
         };
+        app.tabs.push(app.snapshot_tab());
         app.load_entries();
         app
     }
@@ -112,6 +146,10 @@ impl FileManager {
     /// Reload entries from the current directory.
     fn load_entries(&mut self) {
         self.selected_entries.clear();
+        self.preview_loader.clear();
+        self.preview_path = None;
+        self.preview_result = None;
+        self.preview_loading = false;
 
         self.entries.clear();
         self.cached_entries.clear();
@@ -321,5 +359,34 @@ mod tests {
         app.search_query.clear();
         app.apply_filter();
         assert_eq!(app.entries[0].path, path);
+    }
+}
+
+#[cfg(test)]
+mod workspace_regression_tests {
+    use super::*;
+    #[test]
+    fn tabs_keep_independent_folder_filter_and_navigation_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let child = dir.path().join("child");
+        std::fs::create_dir(&child).unwrap();
+        let mut app = FileManager::new(dir.path().into());
+        app.search_query = "ext:rs".into();
+        app.new_tab();
+        app.navigate_to(child.clone());
+        app.search_query = "ext:py".into();
+        app.switch_tab(0);
+        assert_eq!(app.current_path, dir.path());
+        assert_eq!(app.search_query, "ext:rs");
+        app.switch_tab(1);
+        assert_eq!(app.current_path, child);
+        assert_eq!(app.search_query, "ext:py");
+        app.go_back();
+        assert_eq!(app.current_path, dir.path());
+        app.close_tab(1);
+        assert_eq!(app.tabs.len(), 1);
+        assert_eq!(app.search_query, "ext:rs");
+        app.close_tab(0);
+        assert_eq!(app.tabs.len(), 1);
     }
 }

@@ -39,6 +39,7 @@ fn main() -> Result<(), eframe::Error> {
         Box::new(move |cc| {
             setup_cyberpunk_theme(&cc.egui_ctx);
             let mut app = FileManager::new(initial_path);
+            app.initialize_appearance(&cc.egui_ctx, cc.gl.as_deref());
             if automation {
                 if let Err(error) = app.enable_automation(&cc.egui_ctx) {
                     log::error!("Harness startup failed: {error:#}");

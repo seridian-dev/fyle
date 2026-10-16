@@ -1,291 +1,181 @@
-//! Sidebar component with quick access and bookmarks.
-
+//! Navigation with consistent font-independent icons and bounded storage probes.
 use crate::theme::colors;
 use crate::types::{get_quick_access_locations, Bookmark};
-use eframe::egui::{self, Color32, RichText, Rounding, Sense, Stroke, Ui, Vec2};
+use crate::ui::icons::{self, Icon};
+use eframe::egui::{self, RichText, Sense, Ui};
 use std::path::PathBuf;
 use sysinfo::Disks;
 
-/// Actions from the sidebar.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum SidebarAction {
-    /// Navigate to a path.
     Navigate(PathBuf),
-    /// Remove a bookmark by index.
     RemoveBookmark(usize),
-    /// Add bookmark for current path.
     AddBookmark(String),
 }
-
-fn get_location_icon(name: &str) -> &'static str {
+fn location_icon(name: &str) -> Icon {
     match name {
-        "Home" => "🏠",
-        "Desktop" => "🖥️",
-        "Documents" => "📄",
-        "Downloads" => "📥",
-        "Pictures" => "🖼️",
-        "Music" => "🎵",
-        "Videos" => "🎬",
-        _ => "📁",
+        "Home" => Icon::Home,
+        "Desktop" => Icon::Desktop,
+        "Documents" => Icon::Documents,
+        "Downloads" => Icon::Downloads,
+        "Pictures" => Icon::Image,
+        "Music" => Icon::Music,
+        "Videos" => Icon::Video,
+        _ => Icon::Folder,
     }
 }
-
-/// Styled section header for sidebar.
-fn render_section_header<R>(
-    ui: &mut Ui,
-    title: &str,
-    icon: &str,
-    color: Color32,
-    add_body: impl FnOnce(&mut Ui) -> R,
-) -> egui::CollapsingResponse<R> {
-    let header_text = format!("{} {}", icon, title);
-
-    egui::CollapsingHeader::new(RichText::new(header_text).color(color).strong().size(14.0))
-        .default_open(true)
-        .show(ui, add_body)
-}
-
-/// Render a styled navigation button.
-fn render_nav_button(ui: &mut Ui, icon: &str, label: &str, is_active: bool) -> bool {
-    let button_height = 30.0;
-    let available_width = ui.available_width();
-
-    let bg_color = if is_active {
-        colors::ELECTRIC_BLUE.linear_multiply(0.2)
-    } else {
-        Color32::TRANSPARENT
-    };
-
-    let text_color = if is_active {
-        colors::CYBER_GREEN
-    } else {
-        colors::ELECTRIC_BLUE
-    };
-
+fn nav_row(ui: &mut Ui, id: &str, label: &str, icon: Icon, active: bool) -> egui::Response {
     let (rect, response) =
-        ui.allocate_exact_size(Vec2::new(available_width, button_height), Sense::click());
-
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 36.0), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, active, label)
+    });
     if ui.is_rect_visible(rect) {
-        // Background
-        let bg = if response.hovered() {
-            colors::ELECTRIC_BLUE.linear_multiply(0.15)
+        let fill = if active {
+            egui::Color32::from_rgb(8, 45, 60)
+        } else if response.hovered() {
+            colors::MIDNIGHT_PURPLE
         } else {
-            bg_color
+            egui::Color32::TRANSPARENT
         };
-
-        ui.painter().rect(
-            rect,
-            Rounding::same(4.0),
-            bg,
-            if response.hovered() || is_active {
-                Stroke::new(1.0_f32, colors::ELECTRIC_BLUE.linear_multiply(0.5))
-            } else {
-                Stroke::NONE
-            },
-        );
-
-        // Left accent bar for active item
-        if is_active {
-            let accent_rect = egui::Rect::from_min_size(rect.min, Vec2::new(3.0, rect.height()));
-            ui.painter()
-                .rect_filled(accent_rect, Rounding::ZERO, colors::CYBER_GREEN);
-        }
-
-        // Icon and text
-        let icon_pos = rect.min + Vec2::new(12.0, (button_height - 16.0) / 2.0);
-        ui.painter().text(
-            icon_pos,
-            egui::Align2::LEFT_TOP,
+        ui.painter().rect_filled(rect, 2.0, fill);
+        let color = match icon {
+            Icon::Home | Icon::Desktop | Icon::Documents => colors::ELECTRIC_BLUE,
+            Icon::Downloads => colors::CYBER_GREEN,
+            Icon::Image | Icon::Music | Icon::Video => colors::MAGENTA,
+            Icon::Bookmark => colors::AMBER,
+            _ => colors::MUTED,
+        };
+        icons::paint(
+            ui.painter(),
+            egui::Rect::from_min_size(rect.min + egui::vec2(10.0, 8.0), egui::vec2(20.0, 20.0)),
             icon,
-            egui::FontId::proportional(14.0),
-            text_color,
+            color,
         );
-
-        let text_pos = rect.min + Vec2::new(32.0, (button_height - 14.0) / 2.0);
         ui.painter().text(
-            text_pos,
-            egui::Align2::LEFT_TOP,
-            label,
-            egui::FontId::proportional(13.0),
-            text_color,
+            rect.min + egui::vec2(42.0, 18.0),
+            egui::Align2::LEFT_CENTER,
+            crate::ui::truncate_name(label, 22),
+            egui::FontId::proportional(14.0),
+            if active { colors::TEXT } else { colors::MUTED },
         );
-
-        // Hover arrow indicator
-        if response.hovered() && !is_active {
-            let arrow_pos = rect.right_center() - Vec2::new(16.0, 0.0);
-            ui.painter().text(
-                arrow_pos,
-                egui::Align2::CENTER_CENTER,
-                "→",
-                egui::FontId::proportional(12.0),
-                colors::CYBER_GREEN,
-            );
-        }
     }
-
-    response.clicked()
+    crate::ui::expose_control(ui, id, label, &response);
+    response
 }
-
-/// Render a styled bookmark button with remove option.
-fn render_bookmark_button(ui: &mut Ui, name: &str, is_active: bool) -> (bool, bool) {
-    let button_height = 28.0;
-    let available_width = ui.available_width();
-
-    let mut clicked = false;
-    let mut remove_clicked = false;
-
-    ui.horizontal(|ui| {
-        let button_width = available_width - 28.0;
-
-        let (rect, response) =
-            ui.allocate_exact_size(Vec2::new(button_width, button_height), Sense::click());
-
-        if ui.is_rect_visible(rect) {
-            let bg = if is_active {
-                colors::AMBER.linear_multiply(0.2)
-            } else if response.hovered() {
-                colors::AMBER.linear_multiply(0.1)
-            } else {
-                Color32::TRANSPARENT
-            };
-
-            ui.painter().rect(
-                rect,
-                Rounding::same(4.0),
-                bg,
-                if response.hovered() || is_active {
-                    Stroke::new(1.0_f32, colors::AMBER.linear_multiply(0.5))
-                } else {
-                    Stroke::NONE
-                },
-            );
-
-            // Left accent bar for active item
-            if is_active {
-                let accent_rect =
-                    egui::Rect::from_min_size(rect.min, Vec2::new(3.0, rect.height()));
-                ui.painter()
-                    .rect_filled(accent_rect, Rounding::ZERO, colors::AMBER);
-            }
-
-            // Bookmark icon
-            let icon_pos = rect.min + Vec2::new(8.0, (button_height - 14.0) / 2.0);
-            ui.painter().text(
-                icon_pos,
-                egui::Align2::LEFT_TOP,
-                "★",
-                egui::FontId::proportional(12.0),
-                colors::AMBER,
-            );
-
-            // Bookmark name
-            let text_pos = rect.min + Vec2::new(24.0, (button_height - 13.0) / 2.0);
-            let display_name = if name.chars().count() > 18 {
-                format!("{}...", name.chars().take(15).collect::<String>())
-            } else {
-                name.to_string()
-            };
-            ui.painter().text(
-                text_pos,
-                egui::Align2::LEFT_TOP,
-                &display_name,
-                egui::FontId::proportional(12.0),
-                colors::AMBER,
-            );
-        }
-
-        clicked = response.clicked();
-
-        // Remove button
-        let remove_response = ui
-            .add(
-                egui::Button::new(RichText::new("×").color(colors::CRIMSON).size(14.0))
-                    .fill(Color32::TRANSPARENT)
-                    .stroke(Stroke::NONE)
-                    .min_size(Vec2::new(24.0, button_height)),
-            )
-            .on_hover_text("Remove bookmark");
-
-        remove_clicked = remove_response.clicked();
-    });
-
-    (clicked, remove_clicked)
-}
-
-/// Render quick access section.
-pub fn render_quick_access(ui: &mut Ui, current_path: &PathBuf) -> Option<SidebarAction> {
-    let mut action = None;
-
-    ui.add_space(4.0);
-
-    render_section_header(ui, "Quick Access", "⚡", colors::ELECTRIC_BLUE, |ui| {
-        ui.add_space(4.0);
-
-        for location in get_quick_access_locations() {
-            let icon = get_location_icon(location.name);
-            let path = (location.get_path)();
-            let is_active = path.as_ref() == Some(current_path);
-
-            if render_nav_button(ui, icon, location.name, is_active) {
-                if let Some(p) = path {
-                    action = Some(SidebarAction::Navigate(p));
-                }
-            }
-            ui.add_space(2.0);
-        }
-    });
-
-    action
-}
-
-/// Render bookmarks section.
-pub fn render_bookmarks(
+pub fn render_sidebar(
     ui: &mut Ui,
     bookmarks: &[Bookmark],
     current_path: &PathBuf,
+    storage: &mut StorageCache,
 ) -> Option<SidebarAction> {
     let mut action = None;
-
-    ui.add_space(4.0);
-
-    render_section_header(ui, "Bookmarks", "★", colors::AMBER, |ui| {
-        ui.add_space(4.0);
-
-        if bookmarks.is_empty() {
+    egui::ScrollArea::vertical()
+        .id_source("places_scroll")
+        .show(ui, |ui| {
+            ui.add_space(10.0);
+            ui.label(
+                RichText::new("QUICK ACCESS //")
+                    .size(11.0)
+                    .strong()
+                    .color(colors::MUTED),
+            );
             ui.add_space(8.0);
-            ui.vertical_centered(|ui| {
+            for location in get_quick_access_locations() {
+                let path = (location.get_path)();
+                ui.add_enabled_ui(path.is_some(), |ui| {
+                    let response = nav_row(
+                        ui,
+                        &format!("place:{}", location.name.to_lowercase()),
+                        location.name,
+                        location_icon(location.name),
+                        path.as_ref() == Some(current_path),
+                    );
+                    if let Some(path) = &path {
+                        let response = response.on_hover_text(path.display().to_string());
+                        if response.clicked() {
+                            action = Some(SidebarAction::Navigate(path.clone()));
+                        }
+                    } else {
+                        response.on_disabled_hover_text(
+                            "This location is not configured for your user",
+                        );
+                    }
+                });
+            }
+            ui.add_space(18.0);
+            ui.horizontal(|ui| {
                 ui.label(
-                    RichText::new("No bookmarks yet")
-                        .italics()
-                        .color(colors::AMBER.linear_multiply(0.5))
-                        .size(12.0),
+                    RichText::new("PINNED //")
+                        .size(11.0)
+                        .strong()
+                        .color(colors::MUTED),
                 );
-                ui.add_space(4.0);
-                ui.label(
-                    RichText::new("Right-click a folder to add")
-                        .color(colors::AMBER.linear_multiply(0.4))
-                        .size(10.0),
-                );
+                let response = ui.small_button("+").on_hover_text("Pin this folder");
+                crate::ui::expose_control(ui, "pin_folder", "Pin this folder", &response);
+                if response.clicked() {
+                    action = Some(SidebarAction::AddBookmark(
+                        current_path
+                            .file_name()
+                            .unwrap_or(current_path.as_os_str())
+                            .to_string_lossy()
+                            .into_owned(),
+                    ));
+                }
             });
-            ui.add_space(8.0);
-        } else {
+            if bookmarks.is_empty() {
+                ui.add_space(6.0);
+                ui.label(
+                    RichText::new("Keep your places close.\nPin a folder with +")
+                        .size(12.0)
+                        .color(colors::MUTED),
+                );
+            }
             for (index, bookmark) in bookmarks.iter().enumerate() {
-                let is_active = &bookmark.path == current_path;
-                let (clicked, remove_clicked) =
-                    render_bookmark_button(ui, &bookmark.name, is_active);
-
-                if clicked {
+                let response = nav_row(
+                    ui,
+                    &format!("bookmark:{index}"),
+                    &bookmark.name,
+                    Icon::Bookmark,
+                    bookmark.path == *current_path,
+                )
+                .on_hover_text(bookmark.path.display().to_string());
+                if response.clicked() {
                     action = Some(SidebarAction::Navigate(bookmark.path.clone()));
                 }
-                if remove_clicked {
-                    action = Some(SidebarAction::RemoveBookmark(index));
-                }
-                ui.add_space(2.0);
+                response.context_menu(|ui| {
+                    if ui.button("Unpin folder").clicked() {
+                        action = Some(SidebarAction::RemoveBookmark(index));
+                        ui.close_menu();
+                    }
+                });
             }
-        }
-    });
-
+            ui.add_space(20.0);
+            icons::show(ui, Icon::Drive, 18.0, colors::MUTED);
+            egui::CollapsingHeader::new(RichText::new("Storage").color(colors::MUTED))
+                .default_open(false)
+                .show(ui, |ui| {
+                    for info in storage.entries() {
+                        ui.add(egui::Label::new(RichText::new(&info.name).small()).truncate(true))
+                            .on_hover_text(&info.name);
+                        ui.add(
+                            egui::ProgressBar::new(info.usage_percent / 100.0)
+                                .desired_height(4.0)
+                                .fill(if info.usage_percent > 90.0 {
+                                    colors::CRIMSON
+                                } else {
+                                    colors::ELECTRIC_BLUE
+                                }),
+                        );
+                        ui.small(format!(
+                            "{} of {}",
+                            format_bytes(info.used),
+                            format_bytes(info.total)
+                        ));
+                        ui.add_space(8.0);
+                    }
+                });
+        });
     action
 }
 
@@ -365,129 +255,4 @@ impl StorageCache {
         }
         &self.entries
     }
-}
-
-/// Render storage section.
-pub fn render_storage(ui: &mut Ui, cache: &mut StorageCache) {
-    ui.add_space(4.0);
-
-    render_section_header(ui, "Storage", "💾", colors::MAGENTA, |ui| {
-        ui.add_space(4.0);
-
-        for info in cache.entries() {
-            // Disk name
-            ui.label(
-                RichText::new(&info.name)
-                    .color(colors::ELECTRIC_BLUE)
-                    .size(11.0),
-            );
-
-            // Custom styled progress bar
-            let bar_height = 8.0;
-            let available_width = ui.available_width();
-
-            let (rect, _response) =
-                ui.allocate_exact_size(Vec2::new(available_width, bar_height), Sense::hover());
-
-            if ui.is_rect_visible(rect) {
-                // Background
-                ui.painter()
-                    .rect_filled(rect, Rounding::same(4.0), colors::MIDNIGHT_PURPLE);
-
-                // Progress fill
-                let fill_width = rect.width() * (info.usage_percent / 100.0);
-                let fill_rect =
-                    egui::Rect::from_min_size(rect.min, Vec2::new(fill_width, bar_height));
-
-                // Color based on usage
-                let fill_color = if info.usage_percent > 90.0 {
-                    colors::CRIMSON
-                } else if info.usage_percent > 70.0 {
-                    colors::AMBER
-                } else {
-                    colors::CYBER_GREEN
-                };
-
-                ui.painter()
-                    .rect_filled(fill_rect, Rounding::same(4.0), fill_color);
-
-                // Border
-                ui.painter().rect_stroke(
-                    rect,
-                    Rounding::same(4.0),
-                    Stroke::new(1.0_f32, colors::ELECTRIC_BLUE.linear_multiply(0.3)),
-                );
-            }
-
-            // Usage text
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!("{:.1}%", info.usage_percent))
-                        .color(colors::ELECTRIC_BLUE)
-                        .size(10.0),
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(
-                        RichText::new(format!(
-                            "{} / {}",
-                            format_bytes(info.used),
-                            format_bytes(info.total)
-                        ))
-                        .color(colors::ELECTRIC_BLUE.linear_multiply(0.6))
-                        .size(10.0),
-                    );
-                });
-            });
-
-            ui.add_space(8.0);
-        }
-    });
-}
-
-/// Render complete sidebar.
-pub fn render_sidebar(
-    ui: &mut Ui,
-    bookmarks: &[Bookmark],
-    current_path: &PathBuf,
-    storage_cache: &mut StorageCache,
-) -> Option<SidebarAction> {
-    // Sidebar header
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        ui.add_space(8.0);
-        ui.label(
-            RichText::new("Navigation")
-                .color(colors::ELECTRIC_BLUE)
-                .strong()
-                .size(16.0),
-        );
-    });
-    ui.add_space(4.0);
-
-    // Separator with gradient effect
-    let sep_rect = ui.available_rect_before_wrap();
-    let sep_rect = egui::Rect::from_min_size(sep_rect.min, Vec2::new(sep_rect.width(), 1.0));
-    ui.painter().rect_filled(
-        sep_rect,
-        Rounding::ZERO,
-        colors::ELECTRIC_BLUE.linear_multiply(0.3),
-    );
-    ui.add_space(8.0);
-
-    // Quick access
-    let mut action = render_quick_access(ui, current_path);
-
-    ui.add_space(4.0);
-
-    // Bookmarks
-    if let Some(bookmark_action) = render_bookmarks(ui, bookmarks, current_path) {
-        action = Some(bookmark_action);
-    }
-
-    ui.add_space(4.0);
-
-    // Storage
-    render_storage(ui, storage_cache);
-
-    action
 }

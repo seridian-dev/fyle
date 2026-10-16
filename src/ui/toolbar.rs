@@ -2,7 +2,7 @@
 
 use crate::theme::colors;
 use crate::types::ViewMode;
-use eframe::egui::{self, Color32, RichText, Rounding, Stroke, Ui, Vec2};
+use eframe::egui::{self, Color32, RichText, Ui, Vec2};
 use std::path::Path;
 
 /// Actions from the toolbar.
@@ -10,6 +10,9 @@ use std::path::Path;
 pub enum ToolbarAction {
     /// Navigate back.
     GoBack,
+    Navigate(std::path::PathBuf),
+    Location,
+    Appearance,
     Refresh,
     Jump,
     TogglePreview,
@@ -31,43 +34,84 @@ pub enum ToolbarAction {
     OpenTerminal,
 }
 
-fn render_toolbar_button(ui: &mut Ui, icon: &str, label: &str, color: Color32) -> bool {
-    let button = egui::Button::new(
-        RichText::new(format!("{} {}", icon, label))
-            .color(color)
-            .size(13.0),
-    )
-    .fill(color.linear_multiply(0.05))
-    .stroke(Stroke::new(1.0_f32, color.linear_multiply(0.2)))
-    .rounding(Rounding::same(4.0));
-
-    let response = ui.add(button).on_hover_text(match label {
-        "JUMP" => "Ctrl+P · fuzzy files, bookmarks and commands",
-        "PEEK" => "Space · local read-only text preview",
-        "FOLDER" => "Create a folder here",
-        "FILE" => "Create an empty file here",
-        "TERM" => "Open your desktop terminal here",
-        _ => label,
+use crate::ui::icons::{self, Icon};
+fn button(
+    ui: &mut Ui,
+    id: &str,
+    label: &str,
+    icon: Option<Icon>,
+    selected: bool,
+) -> egui::Response {
+    let width = if label.is_empty() {
+        32.0
+    } else {
+        ui.fonts(|fonts| {
+            fonts
+                .layout_no_wrap(label.into(), egui::FontId::monospace(12.0), colors::TEXT)
+                .size()
+                .x
+        }) + if icon.is_some() { 42.0 } else { 22.0 }
+    };
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 32.0), egui::Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::Button,
+            selected,
+            if label.is_empty() { id } else { label },
+        )
     });
-    crate::ui::expose_control(ui, &label.to_ascii_lowercase(), label, &response);
-
-    if response.hovered() {
-        ui.painter().rect_stroke(
-            response.rect,
-            Rounding::same(4.0),
-            Stroke::new(1.0_f32, color.linear_multiply(0.8)),
+    let fill = if selected {
+        Color32::from_rgb(10, 51, 66)
+    } else if response.hovered() {
+        colors::MIDNIGHT_PURPLE
+    } else {
+        Color32::TRANSPARENT
+    };
+    ui.painter().rect_filled(rect, 2.0, fill);
+    if response.hovered() || selected {
+        ui.painter()
+            .rect_stroke(rect, 2.0, egui::Stroke::new(1.0_f32, colors::ELECTRIC_BLUE));
+    }
+    let color = if response.enabled() {
+        if selected {
+            colors::ELECTRIC_BLUE
+        } else {
+            colors::TEXT
+        }
+    } else {
+        colors::MUTED.linear_multiply(0.4)
+    };
+    if let Some(icon) = icon {
+        icons::paint(
+            ui.painter(),
+            egui::Rect::from_center_size(
+                egui::pos2(rect.left() + 16.0, rect.center().y),
+                egui::vec2(18.0, 18.0),
+            ),
+            icon,
+            color,
         );
     }
-
-    response.clicked()
+    if !label.is_empty() {
+        ui.painter().text(
+            egui::pos2(
+                rect.left() + if icon.is_some() { 32.0 } else { 11.0 },
+                rect.center().y,
+            ),
+            egui::Align2::LEFT_CENTER,
+            label,
+            egui::FontId::monospace(12.0),
+            color,
+        );
+    }
+    crate::ui::expose_control(ui, id, label, &response);
+    response
 }
-
-/// Render the main toolbar.
-#[allow(clippy::too_many_arguments)] // Explicit view inputs; no global app dependency.
+#[allow(clippy::too_many_arguments)]
 pub fn render_toolbar(
     ui: &mut Ui,
     current_path: &Path,
-    file_count: usize,
+    _file_count: usize,
     show_hidden: bool,
     view_mode: &ViewMode,
     search_query: &mut String,
@@ -75,271 +119,217 @@ pub fn render_toolbar(
     can_go_forward: bool,
 ) -> Option<ToolbarAction> {
     let mut action = None;
-
-    ui.add_space(4.0);
     ui.horizontal(|ui| {
-        // Left side - app name with glow effect
-        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.add_space(8.0);
-            ui.label(
-                RichText::new("FYLE")
-                    .font(egui::FontId::proportional(24.0))
-                    .color(colors::ELECTRIC_BLUE)
-                    .strong(),
-            );
-
-            // Subtitle
-            ui.add_space(4.0);
-            ui.label(
-                RichText::new(concat!("v", env!("CARGO_PKG_VERSION")))
-                    .color(colors::ELECTRIC_BLUE.linear_multiply(0.4))
-                    .size(10.0),
-            );
-        });
-
-        // Right side - path breadcrumbs or info
+        ui.label(
+            RichText::new("F Y L E")
+                .size(24.0)
+                .monospace()
+                .strong()
+                .color(colors::TEXT),
+        );
+        ui.label(
+            RichText::new("// FIELD SYSTEM")
+                .size(12.0)
+                .color(colors::MUTED),
+        );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.add_space(8.0);
-            ui.label(
-                RichText::new(format!("{} items", file_count))
-                    .color(colors::ELECTRIC_BLUE.linear_multiply(0.6))
-                    .size(12.0),
-            );
-            ui.separator();
-
-            let path_display = current_path.display().to_string();
-            let truncated_path = if path_display.chars().count() > 50 {
-                format!(
-                    "...{}",
-                    path_display
-                        .chars()
-                        .skip(path_display.chars().count() - 47)
-                        .collect::<String>()
-                )
-            } else {
-                path_display
-            };
-
-            ui.label(
-                RichText::new(truncated_path)
-                    .color(colors::CYBER_GREEN)
-                    .size(12.0)
-                    .monospace(),
-            );
-            ui.label(
-                RichText::new("PATH:")
-                    .color(colors::CYBER_GREEN.linear_multiply(0.4))
-                    .size(10.0)
-                    .strong(),
-            );
+            if button(ui, "jump", "JUMP", Some(Icon::Code), false)
+                .on_hover_text("Ctrl+P · find files and commands")
+                .clicked()
+            {
+                action = Some(ToolbarAction::Jump);
+            }
+            if button(ui, "peek", "PEEK", Some(Icon::Peek), false)
+                .on_hover_text("Space · local text preview")
+                .clicked()
+            {
+                action = Some(ToolbarAction::TogglePreview);
+            }
         });
     });
-
-    ui.add_space(4.0);
-    ui.separator();
-    ui.add_space(4.0);
-
-    ui.horizontal_wrapped(|ui| {
-        ui.add_space(4.0);
-
-        // Navigation history
-        if ui
-            .add_enabled(
-                can_go_back,
-                egui::Button::new(RichText::new("◀").color(colors::ELECTRIC_BLUE)),
-            )
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        ui.add_enabled_ui(can_go_back, |ui| {
+            if button(ui, "back", "", Some(Icon::Back), false)
+                .on_hover_text("Back · Alt+Left")
+                .clicked()
+            {
+                action = Some(ToolbarAction::GoBack);
+            }
+        });
+        ui.add_enabled_ui(can_go_forward, |ui| {
+            if button(ui, "forward", "", Some(Icon::Forward), false)
+                .on_hover_text("Forward · Alt+Right")
+                .clicked()
+            {
+                action = Some(ToolbarAction::GoForward);
+            }
+        });
+        if button(ui, "up", "", Some(Icon::Up), false)
+            .on_hover_text("Parent folder")
             .clicked()
         {
-            action = Some(ToolbarAction::GoBack);
-        }
-
-        if ui
-            .add_enabled(
-                can_go_forward,
-                egui::Button::new(RichText::new("▶").color(colors::ELECTRIC_BLUE)),
-            )
-            .clicked()
-        {
-            action = Some(ToolbarAction::GoForward);
-        }
-
-        ui.add_space(4.0);
-        ui.separator();
-        ui.add_space(4.0);
-
-        // Navigation button
-        if render_toolbar_button(ui, "⬆", "UP", colors::CYBER_GREEN) {
             action = Some(ToolbarAction::GoUp);
         }
-
-        ui.add_space(8.0);
-        ui.separator();
-        ui.add_space(8.0);
-
-        if render_toolbar_button(ui, "", "JUMP", colors::ELECTRIC_BLUE) {
-            action = Some(ToolbarAction::Jump);
-        }
-        if render_toolbar_button(ui, "", "PEEK", colors::CYBER_GREEN) {
-            action = Some(ToolbarAction::TogglePreview);
-        }
-
-        // Create buttons
-        if render_toolbar_button(ui, "📁", "FOLDER", colors::CYBER_GREEN) {
-            action = Some(ToolbarAction::NewFolder);
-        }
-
-        if render_toolbar_button(ui, "📄", "FILE", colors::ELECTRIC_BLUE) {
-            action = Some(ToolbarAction::NewFile);
-        }
-
-        if render_toolbar_button(ui, "💻", "TERM", colors::MAGENTA) {
-            action = Some(ToolbarAction::OpenTerminal);
-        }
-
-        ui.add_space(8.0);
-        ui.separator();
-        ui.add_space(8.0);
-    });
-
-    ui.horizontal(|ui| {
-        // Search with styled frame
-        ui.label(
-            RichText::new("SEARCH")
-                .color(colors::ELECTRIC_BLUE.linear_multiply(0.5))
-                .size(10.0)
-                .strong(),
+        let available = (ui.available_width() - 45.0).max(50.0);
+        ui.allocate_ui_with_layout(
+            egui::vec2(available, 32.0),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_clip_rect(ui.clip_rect().intersect(ui.max_rect()));
+                let ancestors: Vec<_> = current_path.ancestors().collect();
+                let count = if available > 500.0 {
+                    5
+                } else if available > 300.0 {
+                    3
+                } else {
+                    1
+                };
+                for (index, path) in ancestors.iter().take(count).rev().enumerate() {
+                    if index > 0 {
+                        ui.label(RichText::new("/").color(colors::MUTED));
+                    }
+                    let label = path
+                        .file_name()
+                        .unwrap_or(path.as_os_str())
+                        .to_string_lossy();
+                    let response = ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(crate::ui::truncate_name(
+                                    if label == "/" { "Root" } else { &label },
+                                    20,
+                                ))
+                                .color(if *path == current_path {
+                                    colors::TEXT
+                                } else {
+                                    colors::MUTED
+                                }),
+                            )
+                            .frame(false),
+                        )
+                        .on_hover_text(path.display().to_string());
+                    crate::ui::expose_control(
+                        ui,
+                        &format!("breadcrumb:{}", path.display()),
+                        &label,
+                        &response,
+                    );
+                    if response.clicked() {
+                        action = Some(ToolbarAction::Navigate(path.to_path_buf()));
+                    }
+                }
+            },
         );
-
-        let search_width = (ui.available_width() - 240.0).clamp(60.0, 320.0);
-
-        let search_response = ui.add(
+        if button(ui, "location", "…", None, false)
+            .on_hover_text("Go to location · Ctrl+L")
+            .clicked()
+        {
+            action = Some(ToolbarAction::Location);
+        }
+    });
+    ui.horizontal_wrapped(|ui| {
+        let width = (ui.available_width() - 250.0).clamp(90.0, 380.0);
+        let response = ui.add(
             egui::TextEdit::singleline(search_query)
                 .id(egui::Id::new("file_search"))
-                .hint_text("Name, ext:rs, size:>10mb…")
-                .desired_width(search_width)
-                .margin(Vec2::new(8.0, 4.0)),
+                .hint_text("Filter files · Ctrl+F")
+                .desired_width(width)
+                .margin(Vec2::new(10.0, 7.0)),
         );
-
-        crate::ui::expose_control(ui, "search", "Filter files", &search_response);
-        if search_response.changed() {
+        crate::ui::expose_control(ui, "search", "Filter files", &response);
+        if response.changed() {
             action = Some(ToolbarAction::Search(search_query.clone()));
         }
-
-        ui.add_space(8.0);
-        ui.separator();
-        ui.add_space(8.0);
-
-        // Hidden files toggle
-        let hidden_text = if show_hidden {
-            "HIDDEN: ON"
-        } else {
-            "HIDDEN: OFF"
-        };
-
-        if ui
-            .add(egui::SelectableLabel::new(
-                show_hidden,
-                RichText::new(hidden_text).size(11.0),
-            ))
+        if button(ui, "hidden", "Hidden", None, show_hidden)
+            .on_hover_text("Show hidden files · Ctrl+H")
             .clicked()
         {
             action = Some(ToolbarAction::ToggleHidden);
         }
-
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.add_space(4.0);
-
-            // View mode toggles
-            let grid_active = *view_mode == ViewMode::Grid;
-            let grid_response = ui.add(egui::SelectableLabel::new(
-                grid_active,
-                RichText::new("GRID").size(11.0),
-            ));
-            crate::ui::expose_control(ui, "grid", "Grid view", &grid_response);
-            if grid_response.clicked() && !grid_active {
-                action = Some(ToolbarAction::SetViewMode(ViewMode::Grid));
+        if button(
+            ui,
+            "list",
+            "",
+            Some(Icon::List),
+            *view_mode == ViewMode::List,
+        )
+        .on_hover_text("List view")
+        .clicked()
+        {
+            action = Some(ToolbarAction::SetViewMode(ViewMode::List));
+        }
+        if button(
+            ui,
+            "grid",
+            "",
+            Some(Icon::Grid),
+            *view_mode == ViewMode::Grid,
+        )
+        .on_hover_text("Card view")
+        .clicked()
+        {
+            action = Some(ToolbarAction::SetViewMode(ViewMode::Grid));
+        }
+        if button(ui, "folder", "New folder", Some(Icon::Plus), false).clicked() {
+            action = Some(ToolbarAction::NewFolder);
+        }
+        ui.menu_button("More", |ui| {
+            for (label, value) in [
+                ("New file", ToolbarAction::NewFile),
+                ("Open terminal", ToolbarAction::OpenTerminal),
+                ("Refresh", ToolbarAction::Refresh),
+                ("Appearance", ToolbarAction::Appearance),
+            ] {
+                if button(
+                    ui,
+                    &label.to_lowercase().replace(' ', "_"),
+                    label,
+                    Some(if label == "Open terminal" {
+                        Icon::Terminal
+                    } else {
+                        Icon::Plus
+                    }),
+                    false,
+                )
+                .clicked()
+                {
+                    action = Some(value);
+                    ui.close_menu();
+                }
             }
-
-            let list_active = *view_mode == ViewMode::List;
-            let list_response = ui.add(egui::SelectableLabel::new(
-                list_active,
-                RichText::new("LIST").size(11.0),
-            ));
-            crate::ui::expose_control(ui, "list", "List view", &list_response);
-            if list_response.clicked() && !list_active {
-                action = Some(ToolbarAction::SetViewMode(ViewMode::List));
-            }
-
-            ui.label(
-                RichText::new("VIEW:")
-                    .color(colors::MAGENTA.linear_multiply(0.5))
-                    .size(10.0)
-                    .strong(),
-            );
         });
     });
-
-    ui.add_space(4.0);
-
     action
 }
-
-/// Render the bulk operations toolbar (shown when items are selected).
 pub fn render_bulk_operations(ui: &mut Ui, selected_count: usize) -> Option<BulkAction> {
     if selected_count == 0 {
         return None;
     }
-
     let mut action = None;
-
-    ui.add_space(2.0);
     egui::Frame::none()
-        .fill(colors::ELECTRIC_BLUE.linear_multiply(0.05))
-        .stroke(Stroke::new(
-            1.0_f32,
-            colors::ELECTRIC_BLUE.linear_multiply(0.2),
-        ))
-        .inner_margin(4.0)
+        .fill(colors::DARK_SLATE)
+        .rounding(8.0)
+        .inner_margin(6.0)
         .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.add_space(4.0);
+            ui.horizontal_wrapped(|ui| {
                 ui.label(
-                    RichText::new(format!("{} SELECTED", selected_count))
-                        .color(colors::ELECTRIC_BLUE)
-                        .strong()
-                        .size(11.0),
+                    RichText::new(format!("{selected_count} selected"))
+                        .color(colors::ELECTRIC_BLUE),
                 );
-
-                ui.add_space(12.0);
-                ui.separator();
-                ui.add_space(12.0);
-
-                if render_toolbar_button(ui, "✂", "CUT", colors::AMBER) {
-                    action = Some(BulkAction::Cut);
-                }
-
-                if render_toolbar_button(ui, "📋", "COPY", colors::CYBER_GREEN) {
-                    action = Some(BulkAction::Copy);
-                }
-
-                if render_toolbar_button(ui, "🗑", "DELETE", colors::CRIMSON) {
-                    action = Some(BulkAction::Delete);
-                }
-
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add_space(4.0);
-                    if ui.small_button("NONE").clicked() {
-                        action = Some(BulkAction::SelectNone);
+                for (label, value) in [
+                    ("Copy", BulkAction::Copy),
+                    ("Cut", BulkAction::Cut),
+                    ("Delete…", BulkAction::Delete),
+                    ("Select all", BulkAction::SelectAll),
+                    ("Clear", BulkAction::SelectNone),
+                ] {
+                    if ui.small_button(label).clicked() {
+                        action = Some(value);
                     }
-                    if ui.small_button("ALL").clicked() {
-                        action = Some(BulkAction::SelectAll);
-                    }
-                });
+                }
             });
         });
-
-    ui.add_space(4.0);
-
     action
 }
 
@@ -351,4 +341,27 @@ pub enum BulkAction {
     Delete,
     SelectAll,
     SelectNone,
+}
+
+#[cfg(test)]
+mod accessibility_tests {
+    use super::*;
+    #[test]
+    fn focused_vector_controls_have_accessibility_nodes() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                button(ui, "test_back", "Back", Some(Icon::Back), false).request_focus();
+            });
+        });
+        let update = output.platform_output.accesskit_update.unwrap();
+        assert!(
+            update
+                .nodes
+                .iter()
+                .any(|(id, node)| *id == update.focus && node.name() == Some("Back")),
+            "Focused custom control must appear in the accessibility tree"
+        );
+    }
 }

@@ -1,5 +1,5 @@
 //! Responsive, virtualized file list with shared header and row geometry.
-use crate::core::{format_size, get_file_icon, open_with_recommended};
+use crate::core::{format_size, open_with_recommended};
 use crate::theme::{colors, get_entry_color};
 use crate::types::{FileEntry, SortBy, SortOrder};
 use crate::ui::ViewAction;
@@ -68,9 +68,9 @@ pub fn render_list_view(
             cell(ui, width, |ui| {
                 let arrow = if *current_sort == sort {
                     if *sort_order == SortOrder::Ascending {
-                        " +"
+                        " ↑"
                     } else {
-                        " -"
+                        " ↓"
                     }
                 } else {
                     ""
@@ -100,6 +100,13 @@ pub fn render_list_view(
                 crate::ui::RENDERED_ENTRIES.with(|count| count.set(count.get() + 1));
                 let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 32.0), Sense::hover());
                 let row = ui.interact(rect, ui.id().with(("file", &entry.path)), Sense::click());
+                row.widget_info(|| {
+                    egui::WidgetInfo::selected(
+                        egui::WidgetType::SelectableLabel,
+                        entry.selected,
+                        &entry.name,
+                    )
+                });
                 let fill = if entry.selected {
                     ui.visuals().selection.bg_fill
                 } else if row.hovered() {
@@ -119,13 +126,18 @@ pub fn render_list_view(
                             toggled = ui.checkbox(&mut selected, "").changed();
                         });
                         cell(ui, 24.0, |ui| {
-                            ui.label(get_file_icon(entry));
+                            let (icon, color) = crate::ui::icons::file_icon(entry);
+                            crate::ui::icons::show(ui, icon, 18.0, color);
                         });
                         cell(ui, columns.name, |ui| {
                             ui.add(
-                                egui::Label::new(
-                                    RichText::new(&entry.name).color(get_entry_color(entry.is_dir)),
-                                )
+                                egui::Label::new(RichText::new(&entry.name).color(
+                                    if entry.is_dir {
+                                        get_entry_color(true)
+                                    } else {
+                                        colors::TEXT
+                                    },
+                                ))
                                 .truncate(true),
                             )
                             .on_hover_text(&entry.name);
@@ -163,7 +175,11 @@ pub fn render_list_view(
                         actions.push(ViewAction::ShowContextMenu(pos, entry.clone()));
                     }
                 } else if row.clicked() {
-                    actions.push(ViewAction::SelectSingle(entry.path.clone()));
+                    actions.push(if ui.input(|i| i.modifiers.ctrl || i.modifiers.command) {
+                        ViewAction::ToggleSelection(entry.path.clone())
+                    } else {
+                        ViewAction::SelectSingle(entry.path.clone())
+                    });
                 }
             }
         });

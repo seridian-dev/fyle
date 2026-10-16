@@ -251,12 +251,16 @@ impl FileManager {
             .resizable(true)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.heading("Local peek");
+                    ui.heading("Inspector");
                     if ui.small_button("Close").clicked() {
                         self.preview_open = false;
                     }
                 });
-                ui.small("Read only · plain text · 32 KiB limit");
+                ui.horizontal(|ui| {
+                    ui.small(RichText::new("Local · read only").color(colors::MUTED));
+                    let response = ui.checkbox(&mut self.preview_wrap, "Wrap");
+                    crate::ui::expose_control(ui, "preview_wrap", "Wrap preview text", &response);
+                });
                 ui.separator();
                 if let Some(path) = &self.preview_path {
                     ui.label(path.file_name().unwrap_or_default().to_string_lossy())
@@ -278,7 +282,7 @@ impl FileManager {
                             .show(ui, |ui| {
                                 ui.add(
                                     egui::Label::new(RichText::new(text).monospace())
-                                        .wrap(false)
+                                        .wrap(self.preview_wrap)
                                         .selectable(true),
                                 );
                             });

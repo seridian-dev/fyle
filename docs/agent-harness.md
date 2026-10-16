@@ -103,3 +103,19 @@ exercise the same keyboard path as the desktop. State includes `query_error`,
 `text`). `gui wait` also waits for a selected preview read to finish. Control IDs
 include `palette_query`, `palette_result:0` through `:9`, `lens:code`,
 `lens:folders`, `lens:all` and `clear_filters` when a lens has no results.
+
+### Workspace (0.9)
+
+Semantic actions include `new_tab`, `switch_tab --name INDEX`, `close_tab` and
+`location`. State includes `tabs.active`, `tabs.items` (paths/queries),
+`location.open/input/error` and `preview.wrap`. Rendered IDs include `new_tab`,
+`tab:INDEX`, `tab_close:INDEX`, `location_input`, `breadcrumb:ABSOLUTE_PATH`,
+`place:home` (and the other Quick Access places), `pin_folder` and `preview_wrap`.
+Unconfigured places report enabled=false. Workspace keyboard tests also cover
+Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+T, Ctrl+W and relative-path entry via Ctrl+L.
+
+Appearance state exposes open/settings/shader_available/shader_error. Use
+`gui action appearance`, `appearance_effects`, `appearance_motion`,
+`appearance_reset` and `appearance_save` controls to inspect real live settings.
+The GUI smoke isolates FYLE_SETTINGS_DIR and verifies settings persistence without
+modifying the user's theme. It asserts actual GL shader compilation succeeded.
