@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 
 
 def main():
@@ -41,6 +42,8 @@ def main():
     def click(control_id):
         # Layout can settle after selection or resizing; stale rejection guarantees
         # that the rejected click did nothing, so recapture before retrying.
+        # Separate synthetic clicks enough to avoid accidental egui double-clicks.
+        time.sleep(0.32)
         for attempt in range(5):
             state = request('state')
             control = next(control for control in state['controls'] if control['id'] == control_id)
