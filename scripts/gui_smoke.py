@@ -57,13 +57,23 @@ def main():
                     raise
 
     def right_click(control_id):
+        time.sleep(0.32)
         for attempt in range(5):
             state = request('state')
             control = next(control for control in state['controls'] if control['id'] == control_id)
             x, y, width, height = control['rect_pixels']
             try:
-                return request('click', '--button', 'right', '--x', x + width / 2,
-                               '--y', y + height / 2, '--snapshot', state['snapshot_id'])
+                state = request('click', '--button', 'right', '--x', x + width / 2,
+                                '--y', y + height / 2, '--snapshot', state['snapshot_id'])
+                expected = {'context_open', 'context_copy', 'context_cut',
+                            'context_delete', 'context_terminal'}
+                for _ in range(10):
+                    visible = {control['id'] for control in state['controls']}
+                    if state['context_menu']['visible'] and expected <= visible:
+                        return state
+                    time.sleep(0.1)
+                    state = request('state')
+                return state
             except RuntimeError as error:
                 if 'Stale snapshot' not in str(error) or attempt == 4:
                     raise
@@ -94,6 +104,8 @@ def main():
             assert launched['state']['editor']['items'][0]['language'] == 'Rust'
             assert Path(launched['state']['editor']['items'][0]['path']) == fixture / 'engine.rs'
             request('action', 'editor_close')
+            state = request('action', 'toggle_hidden')
+            assert not state['show_hidden']
             capture('01-list')
             state = click('entry:alpha.txt')
             assert state['selected_count'] == 1
