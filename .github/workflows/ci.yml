@@ -54,4 +54,4 @@ jobs:
       - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - run: actionlint .github/workflows/ci.yml .github/workflows/release.yml
       - name: Build and package all Linux formats
-        run: scripts/package_linux.sh "$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')" x86_64
+        run: scripts/package_linux.sh "$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)" x86_64
