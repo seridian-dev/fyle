@@ -121,11 +121,18 @@ rejects symlink/special-file entries, binary bytes and documents over 2 MiB. Sav
 compares current bytes with the opened snapshot, writes and syncs a sibling temp
 file, and atomically renames it into place. This protects against ordinary
 outside edits but cannot promise safety against a writer racing the final rename.
-`app/editor.rs` owns session-local document tabs, edits, search, save state and
-Syntect language highlighting. Syntax work is capped at 256 KiB per document;
+`app/editor.rs` owns session-local document tabs, edits, search, line-number
+gutter, save state and Syntect language highlighting. Syntax work is capped at 256 KiB per document;
 larger documents remain editable as plain text. Text/source paths open in Fyle;
-binary/media paths continue through the desktop opener. Future Git review and
-LSP support remain separate features.
+binary/media paths continue through the desktop opener.
+
+`core/git_review.rs` owns read-only status and single-file diff queries. It
+passes argument vectors directly to Git, disables pagers/external diff/textconv,
+uses literal pathspecs, bounds output and refuses unsafe untracked entries.
+`GitReviewWorker` keeps process and file reads off the render thread. The GUI
+shows staged/working layers, rename/deletion/untracked state and line-colored
+diffs. No staging, commit or other repository mutation is exposed. LSP support
+and semantic code intelligence remain separate future work.
 
 ## Local discovery boundary
 

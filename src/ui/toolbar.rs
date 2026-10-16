@@ -15,6 +15,7 @@ pub enum ToolbarAction {
     Appearance,
     Refresh,
     Jump,
+    Review,
     TogglePreview,
     /// Navigate forward.
     GoForward,
@@ -133,6 +134,12 @@ pub fn render_toolbar(
                 .color(colors::MUTED),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if button(ui, "review", "REVIEW", Some(Icon::Code), false)
+                .on_hover_text("Read-only staged and working tree diffs")
+                .clicked()
+            {
+                action = Some(ToolbarAction::Review);
+            }
             if button(ui, "jump", "JUMP", Some(Icon::Code), false)
                 .on_hover_text("Ctrl+P · find files and commands")
                 .clicked()

@@ -70,7 +70,7 @@ impl FileManager {
             "path":self.current_path.to_string_lossy(), "view":format!("{:?}",self.view_mode).to_lowercase(),
             "query":self.search_query, "show_hidden":self.show_hidden,
             "inputs":{"new_folder_name":self.create_folder_state.name,"new_file_name":self.create_file_state.name,"rename_name":self.rename_state.as_ref().map(|state| &state.new_name)}, "loading":self.loading,
-            "busy":self.operation.is_some(), "ready":!self.loading && self.operation.is_none() && !self.preview_loading && !self.editor.is_loading() && !self.editor.is_saving(),
+            "busy":self.operation.is_some() || self.review.is_busy(), "ready":!self.loading && self.operation.is_none() && !self.preview_loading && !self.editor.is_loading() && !self.editor.is_saving() && !self.review.is_busy(),
             "query_error":self.query_error,
             "appearance":{"open":self.appearance_open,"settings":self.appearance,"shader_available":self.shader.is_some(),"shader_error":self.shader_error},
             "tabs":{"active":self.active_tab,"items":self.tabs.iter().enumerate().map(|(index,tab)|json!({"path":if index==self.active_tab {&self.current_path}else{&tab.path},"query":if index==self.active_tab {&self.search_query}else{&tab.query}})).collect::<Vec<_>>()},
@@ -78,6 +78,7 @@ impl FileManager {
             "palette":{"open":self.palette.open,"query":self.palette.query},
             "preview":{"open":self.preview_open,"wrap":self.preview_wrap,"loading":self.preview_loading,"path":self.preview_path,"kind":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {..}))=>"text",Some(Ok(_))=>"unsupported",Some(Err(_))=>"error",None=>"none" },"text":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {text,..}))=>Some(text),_=>None }},
             "editor":self.editor.automation_state(),
+            "review":self.review.automation_state(),
             "dialog": match &self.dialog { DialogType::None => "none", DialogType::ConfirmDelete(..) => "confirm_delete", DialogType::ConfirmCopy(..) => "confirm_copy", DialogType::ConfirmMove(..) => "confirm_move", DialogType::FileProperties(..) => "properties", DialogType::CreateFolder => "create_folder", DialogType::CreateFile => "create_file", DialogType::Rename(..) => "rename" }, "error":self.error_message,
             "total_entries":self.entries.len(), "entry_offset":offset, "entries":entries,
             "selected_count":self.selected_entries.len(), "can_go_back":!self.history.is_empty(), "can_go_forward":!self.forward_history.is_empty(),
@@ -221,6 +222,19 @@ impl FileManager {
             }
             "editor_save" => self.editor.save(),
             "editor_close" => self.editor.request_close(),
+            "review" => {
+                self.appearance_open = false;
+                self.review.open(self.current_path.clone());
+            }
+            "review_refresh" => self.review.refresh(self.current_path.clone()),
+            "review_select" => self
+                .review
+                .select(std::path::PathBuf::from(text("path")?))?,
+            "review_layer" => self.review.set_layer(match text("mode")? {
+                "staged" => fyle::core::git_review::DiffLayer::Staged,
+                "working" => fyle::core::git_review::DiffLayer::Working,
+                _ => bail!("Review layer must be staged or working"),
+            }),
             "new_tab" => self.new_tab(),
             "switch_tab" => self.switch_tab(text("name")?.parse()?),
             "close_tab" => self.close_tab(self.active_tab),

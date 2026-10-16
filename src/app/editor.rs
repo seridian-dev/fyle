@@ -150,6 +150,7 @@ impl Editor {
             "loading": !self.pending_loads.is_empty(),
             "saving": !self.pending_saves.is_empty(),
             "active": self.active,
+            "line_numbers": true,
             "find": self.find,
             "match_index": self.match_index,
             "match_count": active_document.map_or(0, |document| match_positions(document.text(), &self.find).len()),
@@ -315,16 +316,36 @@ impl Editor {
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             let edit_id = ui.make_persistent_id(("editor_text", &path));
-                            let response = ui.add_enabled(
-                                !is_saving,
-                                egui::TextEdit::multiline(text)
-                                    .id(edit_id)
-                                    .font(egui::TextStyle::Monospace)
-                                    .desired_width(f32::INFINITY)
-                                    .desired_rows(24)
-                                    .code_editor()
-                                    .layouter(&mut layouter),
-                            );
+                            let line_count = text.split('\n').count().max(1);
+                            let font_id = egui::TextStyle::Monospace.resolve(ui.style());
+                            let digits = line_count.to_string();
+                            let gutter_width = ui.fonts(|fonts| {
+                                fonts
+                                    .layout_no_wrap(
+                                        digits,
+                                        font_id.clone(),
+                                        crate::theme::colors::MUTED,
+                                    )
+                                    .size()
+                                    .x
+                            }) + 16.0;
+                            let output = ui
+                                .add_enabled_ui(!is_saving, |ui| {
+                                    let mut margin = egui::Margin::same(8.0);
+                                    margin.left += gutter_width;
+                                    egui::TextEdit::multiline(text)
+                                        .id(edit_id)
+                                        .font(egui::TextStyle::Monospace)
+                                        .desired_width(f32::INFINITY)
+                                        .desired_rows(24)
+                                        .code_editor()
+                                        .margin(margin)
+                                        .layouter(&mut layouter)
+                                        .show(ui)
+                                })
+                                .inner;
+                            let response = output.response.clone();
+                            paint_line_numbers(ui, &output, gutter_width);
                             crate::ui::expose_control(ui, "editor_text", "Source text", &response);
                             if let Some((requested_path, byte_index)) = &requested_match {
                                 if requested_path == &path {
@@ -444,6 +465,41 @@ impl Editor {
                 }
                 Err(error) => self.error = Some(error.to_string()),
             }
+        }
+    }
+}
+
+fn paint_line_numbers(ui: &egui::Ui, output: &egui::text_edit::TextEditOutput, gutter_width: f32) {
+    let gutter = egui::Rect::from_min_max(
+        egui::pos2(
+            output.galley_pos.x - gutter_width,
+            output.response.rect.top(),
+        ),
+        egui::pos2(output.galley_pos.x - 2.0, output.response.rect.bottom()),
+    );
+    ui.painter()
+        .rect_filled(gutter, 0.0, crate::theme::colors::DARK_SLATE);
+    let clip = ui.clip_rect();
+    let painter = ui.painter().with_clip_rect(clip);
+    let mut line_number = 1usize;
+    let mut start_of_line = true;
+    let font = egui::FontId::monospace(egui::TextStyle::Monospace.resolve(ui.style()).size);
+    for row in &output.galley.rows {
+        if start_of_line {
+            let y = output.galley_pos.y + row.rect.center().y;
+            if y >= clip.top() - row.rect.height() && y <= clip.bottom() + row.rect.height() {
+                painter.text(
+                    egui::pos2(gutter.right() - 6.0, y),
+                    egui::Align2::RIGHT_CENTER,
+                    line_number.to_string(),
+                    font.clone(),
+                    crate::theme::colors::MUTED,
+                );
+            }
+        }
+        start_of_line = row.ends_with_newline;
+        if row.ends_with_newline {
+            line_number += 1;
         }
     }
 }

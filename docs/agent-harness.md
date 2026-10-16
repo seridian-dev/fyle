@@ -50,6 +50,10 @@ reply after their next render; asynchronous scans/jobs may still be loading.
 Use `gui wait` before asserting completed results. A ready state can still have an
 error field, so check it. Folder activation does not launch a default file app.
 
+`review` opens read-only Git changes. Use `review_select --path PATH` and
+`review_layer --mode staged|working`; `review_refresh` re-reads the worktree.
+State exposes changed paths/status, the selected diff and loading/error state.
+
 ## Real mouse, text and keyboard events
 
 Get control `rect_pixels: [x,y,width,height]` and `snapshot_id` from fresh state or
@@ -113,6 +117,13 @@ Semantic actions include `new_tab`, `switch_tab --name INDEX`, `close_tab` and
 `place:home` (and the other Quick Access places), `pin_folder` and `preview_wrap`.
 Unconfigured places report enabled=false. Workspace keyboard tests also cover
 Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+T, Ctrl+W and relative-path entry via Ctrl+L.
+
+### Native editor and Git review (0.10)
+
+Editor state includes document language and line-number availability. GUI checks
+cover syntax-colored line-number rendering, document save/search/tabs, and the
+REVIEW window's staged/working changes, Unicode untracked files and colored diffs.
+Semantic review actions are documented above.
 
 Appearance state exposes open/settings/shader_available/shader_error. Use
 `gui action appearance`, `appearance_effects`, `appearance_motion`,

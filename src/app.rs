@@ -4,6 +4,7 @@ mod automation;
 mod discovery;
 mod editor;
 mod render;
+mod review;
 mod workspace;
 use crate::theme::colors;
 use crate::ui::{
@@ -60,6 +61,7 @@ pub(crate) struct FileManager {
     query_error: Option<String>,
     palette: discovery::Palette,
     editor: editor::Editor,
+    review: review::Review,
     preview_open: bool,
     preview_wrap: bool,
     preview_path: Option<PathBuf>,
@@ -130,6 +132,7 @@ impl FileManager {
             query_error: None,
             palette: Default::default(),
             editor: editor::Editor::default(),
+            review: review::Review::default(),
             preview_open: false,
             preview_wrap: true,
             preview_path: None,

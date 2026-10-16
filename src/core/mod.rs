@@ -12,4 +12,5 @@ pub mod loader;
 
 pub mod discovery;
 pub mod editor;
+pub mod git_review;
 pub mod preview;

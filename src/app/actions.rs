@@ -13,6 +13,13 @@ impl FileManager {
     }
 
     pub(super) fn handle_keyboard(&mut self, ctx: &egui::Context) {
+        if ctx.input_mut(|i| {
+            i.consume_key(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::G)
+        }) {
+            self.appearance_open = false;
+            self.review.open(self.current_path.clone());
+            return;
+        }
         if self.editor.is_open() {
             return;
         }
@@ -147,6 +154,10 @@ impl FileManager {
             ToolbarAction::GoBack => self.go_back(),
             ToolbarAction::Refresh => self.load_entries(),
             ToolbarAction::Jump => self.open_palette(),
+            ToolbarAction::Review => {
+                self.appearance_open = false;
+                self.review.open(self.current_path.clone());
+            }
             ToolbarAction::TogglePreview => self.preview_open = !self.preview_open,
             ToolbarAction::GoForward => self.go_forward(),
             ToolbarAction::GoUp => self.go_up(),

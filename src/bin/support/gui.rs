@@ -18,8 +18,8 @@ const HELP: &str = "Fyle GUI harness (opt-in, this app only)
   gui state [--session ID] [--offset N] [--limit N]
   gui wait [--session ID] [--timeout SECONDS]
   gui screenshot [--session ID] [--output image.png]
-  gui action <navigate|back|forward|up|refresh|search|view|select|open_folder|edit_file|editor_save|editor_close|toggle_hidden|new_folder|new_file|palette|peek|new_tab|switch_tab|close_tab|location|appearance|dismiss_error|cancel>
-      [--path PATH | --query TEXT | --mode list|grid | --name NAME] [--session ID]
+  gui action <navigate|back|forward|up|refresh|search|view|select|open_folder|edit_file|editor_save|editor_close|review|review_refresh|review_select|review_layer|toggle_hidden|new_folder|new_file|palette|peek|new_tab|switch_tab|close_tab|location|appearance|dismiss_error|cancel>
+      [--path PATH | --query TEXT | --mode list|grid|staged|working | --name NAME] [--session ID]
   gui click --x X --y Y --snapshot ID [--button left|right] [--session ID]
   gui text --text TEXT [--snapshot ID] [--session ID]
   gui key --key Ctrl+H [--snapshot ID] [--session ID]

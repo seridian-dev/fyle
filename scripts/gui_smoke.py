@@ -75,11 +75,22 @@ def main():
         (fixture / 'beta.txt').write_text('fixture beta')
         (fixture / 'folder').mkdir()
         (fixture / 'engine.rs').write_text('fn main() { /* local peek fixture */ }\n// local peek fixture again\n')
+        git_env = os.environ.copy()
+        git_env.update({'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull})
+        def git(*arguments):
+            subprocess.run(['git', '-C', str(fixture), *arguments], check=True,
+                           env=git_env, stdout=subprocess.DEVNULL)
+        git('init', '-q')
+        git('config', 'user.name', 'Fyle GUI Test')
+        git('config', 'user.email', 'fyle@example.invalid')
+        git('add', 'alpha.txt', 'beta.txt', 'engine.rs', 'folder')
+        git('commit', '-qm', 'GUI fixture')
         try:
             launched = run('launch', '--path', fixture / 'engine.rs')
             session = launched['session']
             assert launched['state']['ready']
             assert launched['state']['editor']['open']
+            assert launched['state']['editor']['line_numbers']
             assert launched['state']['editor']['items'][0]['language'] == 'Rust'
             assert Path(launched['state']['editor']['items'][0]['path']) == fixture / 'engine.rs'
             request('action', 'editor_close')
@@ -96,6 +107,7 @@ def main():
             state = click('context_copy')
             assert not state['context_menu']['visible']
             state = request('action', 'edit_file', '--name', 'engine.rs')
+            state = request('wait')
             assert state['editor']['open']
             assert state['editor']['items'][0]['language'] == 'Rust'
             capture('03-native-editor')
@@ -115,6 +127,7 @@ def main():
             assert not state['editor']['items'][0]['dirty']
             assert 'edited in Fyle' in (fixture / 'engine.rs').read_text()
             state = request('action', 'edit_file', '--name', 'beta.txt')
+            state = request('wait')
             assert len(state['editor']['items']) == 2
             state = click('editor_tab:0')
             assert state['editor']['active'] == 0
@@ -221,6 +234,29 @@ def main():
             saved = json.loads((fixture / '.appearance-fixture' / 'appearance.json').read_text())
             assert saved['highlight'] == [0, 212, 255]
             capture('10-appearance-settings')
+            (fixture / 'review.rs').write_text('fn staged_version() {}\n')
+            git('add', 'review.rs')
+            (fixture / 'review.rs').write_text('fn working_version() {}\n')
+            (fixture / '未追跡.rs').write_text('fn unicode_untracked() {}\n')
+            request('action', 'navigate', '--path', fixture)
+            request('wait')
+            state = request('action', 'review')
+            state = request('wait')
+            assert state['review']['open'] and not state['review']['loading']
+            paths = {change['path']: change for change in state['review']['files']}
+            assert 'review.rs' in paths and paths['review.rs']['staged'] and paths['review.rs']['unstaged']
+            assert '未追跡.rs' in paths and paths['未追跡.rs']['kind'] == 'Untracked'
+            request('action', 'review_select', '--path', 'review.rs')
+            request('action', 'review_layer', '--mode', 'staged')
+            state = request('wait')
+            assert '+fn staged_version() {}' in state['review']['diff']
+            request('action', 'review_layer', '--mode', 'working')
+            state = request('wait')
+            assert '+fn working_version() {}' in state['review']['diff']
+            request('action', 'review_select', '--path', '未追跡.rs')
+            state = request('wait')
+            assert '+fn unicode_untracked() {}' in state['review']['diff']
+            capture('11-git-code-review')
             request('key', '--key', 'Escape')
 
 
@@ -228,6 +264,7 @@ def main():
                 'actual renderer PNG capture', 'pixel row selection', 'pixel click and text filtering',
                 'Fyle-styled context menu vector actions and Copy dispatch',
                 'in-app Rust syntax editing, Unicode-safe find navigation, document tabs and conflict-aware Ctrl+S save',
+                'read-only staged and working diffs, untracked Unicode file review, and bounded Git status',
                 'keyboard select-all and backspace', 'pixel grid toggle',
                 'dialog text/Enter and background folder creation', 'navigation and empty state',
                 'composable lenses and invalid query feedback', 'fuzzy file jump and command dispatch',

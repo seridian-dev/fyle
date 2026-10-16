@@ -115,10 +115,12 @@ impl eframe::App for FileManager {
         self.poll_operation();
         self.poll_preview();
         self.editor.poll_worker();
+        self.review.poll();
         if self.loading
             || self.operation.is_some()
             || self.editor.is_loading()
             || self.editor.is_saving()
+            || self.review.is_busy()
         {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
@@ -286,6 +288,7 @@ impl eframe::App for FileManager {
         self.render_location(ctx);
         self.render_appearance(ctx);
         self.editor.render(ctx);
+        self.review.render(ctx, self.current_path.clone());
         self.poll_preview();
         if self.preview_loading {
             ctx.request_repaint_after(std::time::Duration::from_millis(30));

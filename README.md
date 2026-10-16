@@ -29,10 +29,14 @@ categories. Ctrl-click adds/removes selections in either view.
   status bar keeps the file viewport steady when selection changes.
 - **Built-in editor:** opening common text and source files starts Fyle's own
   syntax-colored editor. It supports multiple document tabs, in-file search,
-  editing and `Ctrl+S`. Documents are limited to 2 MiB UTF-8; syntax coloring
+  line numbers, editing and `Ctrl+S`. Documents are limited to 2 MiB UTF-8; syntax coloring
   pauses above 256 KiB. Binary files and links are declined. Save writes an
   atomic sibling file and refuses to replace content changed by another app.
   `fyle /path/to/source.rs` opens the file in the editor.
+- **Code review:** `REVIEW` or `Ctrl+Shift+G` opens the current Git worktree's
+  changed-file list and separate staged/working diffs. Added and removed lines
+  are color-coded; untracked UTF-8 files are previewed directly. The view is
+  read-only, runs Git off the UI thread, and caps status/diff/file sizes.
 - **Pinned places:** use + beside Pinned to bookmark the current folder;
   right-click a pin to remove it. Unconfigured OS user directories are disabled
   in Quick Access. `More` includes New file, Refresh and Open terminal;
