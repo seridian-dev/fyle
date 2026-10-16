@@ -55,6 +55,9 @@ def main():
             session = launched['session']
             assert launched['state']['ready']
             capture('01-list')
+            state = click('entry:alpha.txt')
+            assert state['selected_count'] == 1
+            assert next(entry for entry in state['entries'] if entry['name'] == 'alpha.txt')['selected']
             state = click('search')
             state = request('text', '--text', 'alpha', '--snapshot', state['snapshot_id'])
             assert state['query'] == 'alpha'
@@ -81,7 +84,7 @@ def main():
             assert state['total_entries'] == 0
             capture('05-empty-folder')
             manifest = {'passed': True, 'session': session, 'checks': [
-                'actual renderer PNG capture', 'pixel click and text filtering',
+                'actual renderer PNG capture', 'pixel row selection', 'pixel click and text filtering',
                 'keyboard select-all and backspace', 'pixel grid toggle',
                 'dialog text/Enter and background folder creation', 'navigation and empty state'],
                 'artifacts': sorted(path.name for path in args.output_dir.iterdir())}

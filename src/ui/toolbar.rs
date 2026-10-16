@@ -98,8 +98,14 @@ pub fn render_toolbar(
             ui.separator();
 
             let path_display = current_path.display().to_string();
-            let truncated_path = if path_display.len() > 50 {
-                format!("...{}", &path_display[path_display.len() - 47..])
+            let truncated_path = if path_display.chars().count() > 50 {
+                format!(
+                    "...{}",
+                    path_display
+                        .chars()
+                        .skip(path_display.chars().count() - 47)
+                        .collect::<String>()
+                )
             } else {
                 path_display
             };
@@ -123,7 +129,7 @@ pub fn render_toolbar(
     ui.separator();
     ui.add_space(4.0);
 
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.add_space(4.0);
 
         // Navigation history
@@ -176,7 +182,9 @@ pub fn render_toolbar(
         ui.add_space(8.0);
         ui.separator();
         ui.add_space(8.0);
+    });
 
+    ui.horizontal(|ui| {
         // Search with styled frame
         ui.label(
             RichText::new("SEARCH")
@@ -185,7 +193,7 @@ pub fn render_toolbar(
                 .strong(),
         );
 
-        let search_width = 200.0;
+        let search_width = (ui.available_width() - 240.0).clamp(60.0, 320.0);
 
         let search_response = ui.add(
             egui::TextEdit::singleline(search_query)

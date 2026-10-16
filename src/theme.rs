@@ -39,7 +39,7 @@ pub fn setup_cyberpunk_theme(ctx: &egui::Context) {
     let mut visuals = Visuals::dark();
 
     // Text and backgrounds
-    visuals.override_text_color = Some(colors::ELECTRIC_BLUE);
+    visuals.override_text_color = Some(Color32::from_rgb(218, 226, 237));
     visuals.panel_fill = colors::DEEP_CHARCOAL;
     visuals.window_fill = colors::DARK_SLATE;
     visuals.faint_bg_color = colors::MIDNIGHT_PURPLE;
