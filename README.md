@@ -86,6 +86,16 @@ resources. F5 refreshes the folder and its selected-file preview after reselecti
 
 ## Build and install
 
+Prebuilt binaries are attached to tagged [GitHub releases](https://github.com/seridian-dev/fyle/releases).
+Linux releases include x86_64 and ARM64 tarballs, Debian/Ubuntu `.deb`,
+Fedora/openSUSE `.rpm`, and Arch Linux pacman packages. The Linux binaries are
+built on Ubuntu 22.04 and require glibc 2.35 or newer plus the system graphics
+libraries listed in [release installation notes](docs/releases.md). The tarball
+avoids a package manager, but it does not bundle those system libraries. Alpine
+Linux is not currently supported by these glibc builds. macOS Intel/Apple Silicon
+and Windows x86_64/ARM64 archives are published alongside Linux packages. Every
+release includes `SHA256SUMS`.
+
 Install a current stable Rust toolchain, Bash and Python 3. On Debian/Ubuntu,
 install `build-essential pkg-config libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev xdg-utils git python3`.
 For desktop entry validation install `desktop-file-utils`.

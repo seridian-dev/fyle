@@ -1,0 +1,147 @@
+name: Binary releases
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            runner: ubuntu-22.04
+            platform: linux
+            arch: x86_64
+          - name: Linux ARM64
+            runner: ubuntu-22.04-arm
+            platform: linux
+            arch: aarch64
+          - name: macOS Intel
+            runner: macos-15-intel
+            platform: macos
+            arch: x86_64
+          - name: macOS Apple Silicon
+            runner: macos-15
+            platform: macos
+            arch: aarch64
+          - name: Windows x86_64
+            runner: windows-2025
+            platform: windows
+            arch: x86_64
+          - name: Windows ARM64
+            runner: windows-11-arm
+            platform: windows
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: release-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: release-${{ matrix.platform }}-${{ matrix.arch }}-
+      - name: Check release tag matches Cargo.toml
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
+          test "$TAG" = "v$VERSION" || { echo "Tag $TAG does not match Cargo.toml version v$VERSION" >&2; exit 1; }
+      - name: Install Linux build and packaging dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev pkg-config
+      - uses: actions/setup-go@v7
+        if: matrix.platform == 'linux'
+        with:
+          go-version: "1.26.4"
+      - name: Install pinned nFPM
+        if: matrix.platform == 'linux'
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Package Linux binaries and distro packages
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: scripts/package_linux.sh "${GITHUB_REF_NAME#v}" "${{ matrix.arch }}"
+      - name: Build macOS binaries
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          cargo build --locked --release --bins
+          mkdir -p dist/fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}/bin
+          install -m 0755 target/release/fyle dist/fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}/bin/fyle
+          install -m 0755 target/release/fyle-cli dist/fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}/bin/fyle-cli
+          install -m 0644 LICENSE README.md dist/fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}/
+          tar -C dist -czf dist/fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}.tar.gz fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}
+      - name: Build Windows binaries
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          cargo build --locked --release --bins
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          $arch = "${{ matrix.arch }}"
+          $folder = "dist/fyle-$version-windows-$arch"
+          New-Item -ItemType Directory -Force "$folder/bin" | Out-Null
+          Copy-Item target/release/fyle.exe, target/release/fyle-cli.exe "$folder/bin/"
+          Copy-Item LICENSE, README.md $folder
+          Compress-Archive -Path $folder -DestinationPath "$folder.zip"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Verify and checksum release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(find dist -maxdepth 1 -type f -print -quit)"
+          find dist -maxdepth 1 -type f -printf '%f\n' | sort
+          cd dist
+          sha256sum * > SHA256SUMS
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/*
+      - name: Publish release with checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --verify-tag --generate-notes --title "$TAG"
+          fi

@@ -1,0 +1,57 @@
+name: fyle
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${VERSION}
+release: "1"
+section: utils
+priority: optional
+maintainer: Seridian Fyle contributors
+description: A cyberpunk desktop file manager and native source editor.
+homepage: https://github.com/seridian-dev/fyle
+license: MIT
+depends:
+  - libxkbcommon0
+  - libxkbcommon-x11-0
+  - libwayland-client0
+  - libegl1
+  - libgl1
+  - xdg-utils
+overrides:
+  rpm:
+    depends:
+      - libxkbcommon.so.0()(64bit)
+      - libxkbcommon-x11.so.0()(64bit)
+      - libwayland-client.so.0()(64bit)
+      - libEGL.so.1()(64bit)
+      - libGL.so.1()(64bit)
+      - xdg-utils
+  archlinux:
+    depends:
+      - libxkbcommon
+      - wayland
+      - libglvnd
+      - mesa
+      - xdg-utils
+contents:
+  - src: ${STAGE_DIR}/usr/bin/fyle
+    dst: /usr/bin/fyle
+    expand: true
+    file_info:
+      mode: 0755
+  - src: ${STAGE_DIR}/usr/bin/fyle-cli
+    dst: /usr/bin/fyle-cli
+    expand: true
+    file_info:
+      mode: 0755
+  - src: fyle.desktop
+    dst: /usr/share/applications/fyle.desktop
+    file_info:
+      mode: 0644
+  - src: LICENSE
+    dst: /usr/share/licenses/fyle/LICENSE
+    file_info:
+      mode: 0644
+  - src: README.md
+    dst: /usr/share/doc/fyle/README.md
+    file_info:
+      mode: 0644
