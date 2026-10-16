@@ -1421,7 +1421,7 @@ dependencies = [
 
 [[package]]
 name = "fyle"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1430,6 +1430,7 @@ dependencies = [
  "egui",
  "env_logger",
  "getrandom 0.2.16",
+ "libc",
  "log",
  "png",
  "serde",

@@ -2,8 +2,28 @@ use super::*;
 
 impl FileManager {
     pub(super) fn handle_keyboard(&mut self, ctx: &egui::Context) {
-        if self.dialog != DialogType::None || ctx.wants_keyboard_input() {
+        if self.dialog == DialogType::None
+            && !self.palette.open
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::F))
+        {
+            ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("file_search")));
             return;
+        }
+        if self.dialog == DialogType::None
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::P))
+        {
+            if self.palette.open {
+                self.palette.open = false;
+            } else {
+                self.open_palette();
+            }
+            return;
+        }
+        if self.palette.open || self.dialog != DialogType::None || ctx.wants_keyboard_input() {
+            return;
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space)) {
+            self.preview_open = !self.preview_open;
         }
         // Ctrl+Up - Go to parent
         if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp) && i.modifiers.ctrl) {
@@ -86,6 +106,9 @@ impl FileManager {
     pub(super) fn handle_toolbar_action(&mut self, action: ToolbarAction) {
         match action {
             ToolbarAction::GoBack => self.go_back(),
+            ToolbarAction::Refresh => self.load_entries(),
+            ToolbarAction::Jump => self.open_palette(),
+            ToolbarAction::TogglePreview => self.preview_open = !self.preview_open,
             ToolbarAction::GoForward => self.go_forward(),
             ToolbarAction::GoUp => self.go_up(),
             ToolbarAction::NewFolder => self.dialog = DialogType::CreateFolder,

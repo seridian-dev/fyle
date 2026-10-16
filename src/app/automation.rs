@@ -70,7 +70,10 @@ impl FileManager {
             "path":self.current_path.to_string_lossy(), "view":format!("{:?}",self.view_mode).to_lowercase(),
             "query":self.search_query, "show_hidden":self.show_hidden,
             "inputs":{"new_folder_name":self.create_folder_state.name,"new_file_name":self.create_file_state.name,"rename_name":self.rename_state.as_ref().map(|state| &state.new_name)}, "loading":self.loading,
-            "busy":self.operation.is_some(), "ready":!self.loading && self.operation.is_none(),
+            "busy":self.operation.is_some(), "ready":!self.loading && self.operation.is_none() && !self.preview_loading,
+            "query_error":self.query_error,
+            "palette":{"open":self.palette.open,"query":self.palette.query},
+            "preview":{"open":self.preview_open,"loading":self.preview_loading,"path":self.preview_path,"kind":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {..}))=>"text",Some(Ok(_))=>"unsupported",Some(Err(_))=>"error",None=>"none" },"text":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {text,..}))=>Some(text),_=>None }},
             "dialog": match &self.dialog { DialogType::None => "none", DialogType::ConfirmDelete(..) => "confirm_delete", DialogType::ConfirmCopy(..) => "confirm_copy", DialogType::ConfirmMove(..) => "confirm_move", DialogType::FileProperties(..) => "properties", DialogType::CreateFolder => "create_folder", DialogType::CreateFile => "create_file", DialogType::Rename(..) => "rename" }, "error":self.error_message,
             "total_entries":self.entries.len(), "entry_offset":offset, "entries":entries,
             "selected_count":self.selected_entries.len(), "can_go_back":!self.history.is_empty(), "can_go_forward":!self.forward_history.is_empty(),
@@ -97,6 +100,7 @@ impl FileManager {
         }
         self.poll_directory();
         self.poll_operation();
+        self.poll_preview();
         let fingerprint = self.describe_gui(ctx, 0, 200).to_string();
         if fingerprint != automation.fingerprint {
             automation.epoch += 1;
@@ -200,10 +204,13 @@ impl FileManager {
                     self.select_single(&path);
                 }
             }
+            "palette" => self.open_palette(),
+            "peek" => self.preview_open = !self.preview_open,
             "new_folder" => self.dialog = DialogType::CreateFolder,
             "new_file" => self.dialog = DialogType::CreateFile,
             "dismiss_error" => self.error_message = None,
             "cancel" => {
+                self.palette.open = false;
                 self.dialog = DialogType::None;
                 self.rename_state = None;
                 self.context_menu.hide();

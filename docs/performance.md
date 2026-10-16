@@ -30,6 +30,13 @@ Other changes remove work rather than relying on timing:
 Initial scans still read metadata for every included entry. Tree copies preflight
 contents before mutation, adding a traversal in exchange for detecting unsupported
 entries before copying. Copy progress currently reports a working state, not bytes
-or a cancellation control. External filesystem changes require F5. GUI session
-validation across KDE, GNOME, Hyprland and OpenRC remains manual; the local Cua
-adapter could not enumerate the Wayland window during this pass.
+or a cancellation control. External filesystem changes require F5. Fyle's agent harness validates its real renderer and input on the development
+host and under Xvfb/Mesa in CI. Integration across KDE, GNOME, Hyprland and
+OpenRC still needs those actual desktop sessions.
+
+Discovery in 0.8 keeps the same limits: lenses filter the cached directory without
+filesystem reads, palette ranking runs only on open/query edits and displays at
+most ten matches, and each peek reads at most 32 KiB plus one truncation byte.
+A single preview worker skips superseded queued requests and generation checks
+prevent stale results replacing a new selection. Text decoding and rendering are
+bounded by the preview cap; no content crawler or indexing service runs.

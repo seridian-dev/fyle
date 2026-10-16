@@ -93,3 +93,13 @@ Run with a new/empty artifact directory. CI executes the same script on Xvfb/Mes
 and uploads `gui-state-and-screenshots`, including partial evidence on failures.
 This is GUI regression coverage, not a substitute for testing native desktop
 integration on KDE, GNOME, Hyprland, OpenRC or systemd sessions.
+
+### Discovery (0.8)
+
+`gui action palette` opens Jump and `gui action peek` toggles Local peek.
+Real `gui key --key Ctrl+P`, `Ctrl+F`, `Space`, Up/Down/Enter and Escape events
+exercise the same keyboard path as the desktop. State includes `query_error`,
+`palette` (`open`, `query`) and `preview` (`open`, `loading`, `path`, `kind`,
+`text`). `gui wait` also waits for a selected preview read to finish. Control IDs
+include `palette_query`, `palette_result:0` through `:9`, `lens:code`,
+`lens:folders`, `lens:all` and `clear_filters` when a lens has no results.

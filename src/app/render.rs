@@ -89,7 +89,7 @@ impl FileManager {
                     ui.end_row();
                 });
         } else {
-            ui.label("Select a file to see details here");
+            ui.label("Ctrl+P jump · Ctrl+F filter · Space peek · F5 refresh");
         }
     }
 }
@@ -107,6 +107,7 @@ impl eframe::App for FileManager {
         }
         self.poll_directory();
         self.poll_operation();
+        self.poll_preview();
         if self.loading || self.operation.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
@@ -119,7 +120,7 @@ impl eframe::App for FileManager {
         self.show_error(ctx);
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.set_enabled(self.operation.is_none());
+            ui.set_enabled(self.operation.is_none() && !self.palette.open);
             let can_go_back = !self.history.is_empty();
             let can_go_forward = !self.forward_history.is_empty();
 
@@ -139,7 +140,7 @@ impl eframe::App for FileManager {
 
         // Sidebar
         egui::SidePanel::left("sidebar").show(ctx, |ui| {
-            ui.set_enabled(self.operation.is_none());
+            ui.set_enabled(self.operation.is_none() && !self.palette.open);
             if let Some(action) = render_sidebar(
                 ui,
                 &self.bookmarks,
@@ -152,13 +153,15 @@ impl eframe::App for FileManager {
 
         // Bottom details panel
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
-            ui.set_enabled(self.operation.is_none());
+            ui.set_enabled(self.operation.is_none() && !self.palette.open);
             self.render_details_panel(ui);
         });
 
+        self.render_preview(ctx);
+
         // Main content area
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.set_enabled(self.operation.is_none());
+            ui.set_enabled(self.operation.is_none() && !self.palette.open);
             ui.horizontal(|ui| {
                 ui.heading("Files");
                 if self.operation.is_some() {
@@ -176,12 +179,20 @@ impl eframe::App for FileManager {
                 }
             });
             if !self.loading && self.entries.is_empty() {
-                ui.label(if self.search_query.is_empty() {
-                    "This folder is empty."
+                if self.search_query.is_empty() {
+                    ui.label("A fresh space. Create a file or folder from the toolbar.");
                 } else {
-                    "No files match your search."
-                });
+                    ui.label("No files match this lens.");
+                    let response = ui.button("Clear filters");
+                    crate::ui::expose_control(ui, "clear_filters", "Clear filters", &response);
+                    if response.clicked() {
+                        self.search_query.clear();
+                        self.apply_filter();
+                    }
+                }
             }
+
+            self.render_lenses(ui);
 
             // Bulk operations toolbar
             if let Some(action) = render_bulk_operations(ui, self.selected_entries.len()) {
@@ -211,6 +222,11 @@ impl eframe::App for FileManager {
         }
 
         self.show_dialogs(ctx);
+        self.render_palette(ctx);
+        self.poll_preview();
+        if self.preview_loading {
+            ctx.request_repaint_after(std::time::Duration::from_millis(30));
+        }
         self.automation_finish(ctx);
     }
 }

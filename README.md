@@ -6,6 +6,32 @@ A [Seridian](https://github.com/seridian-dev) open-source project.
 
 An MIT-licensed Rust file manager with a cyberpunk egui interface. Browse,
 filter, sort, bookmark, copy, move, rename and delete local files.
+Free to use, modify and share. No account or hosted service required.
+
+## Discovery without an index
+
+Fyle 0.8 adds three connected ways to work with a folder:
+
+- **Jump** (`Ctrl+P`): fuzzy-find a file or folder by fragments, jump to a bookmark
+  or a recent folder, or type `>` to find commands. Use Up/Down and Enter;
+  Escape closes it. File results select and peek; folder results navigate.
+- **Lenses** (`Ctrl+F` to focus search): combine name words, `ext:rs,py`,
+  `kind:file`, `kind:folder`, `size:>10mb`, `size:<1kb` or `size:0`. Prefix
+  any term with `-` to exclude it; quote a phrase such as `"release notes"`.
+  Terms are ANDed; comma-separated extensions are ORed. Units use powers of
+  1024. Presets include Code, Folders, Big files and Empty files. Invalid
+  filters show an inline explanation; All or Clear filters resets the lens.
+- **Local peek** (`Space` outside text fields, or the PEEK button): inspect a
+  selected text/source file in a resizable panel. Text is selectable and shown
+  literally, without running scripts or interpreting markup. A background worker
+  reads at most 32 KiB plus one byte; larger files are marked as truncated.
+  Binary files, non-UTF-8 encodings, symlink entries and special files are declined.
+
+Try `ext:rs,py -test size:<100kb` to narrow a busy project folder, then use Jump
+with a fragment like `rdm` to find README. Jump searches the current folder's
+cached entries, bookmarks and this window's recent navigation. It does not crawl
+subdirectories or build a background content index. Peek does not fetch network
+resources. F5 refreshes the folder and its selected-file preview after reselecting.
 
 ## Build and install
 
@@ -121,7 +147,8 @@ python3 scripts/gui_smoke.py --cli target/debug/fyle-cli --output-dir gui-artifa
 ```
 
 It uses temporary fixture files, exercises clicks, typing, keys, view switching,
-folder creation/navigation, and saves five rendered PNG/state pairs. CI runs it
+folder creation/navigation, lenses, fuzzy command/file jumping and local peek.
+It saves eight rendered PNG/state pairs. CI runs it
 under Xvfb/Mesa and uploads the evidence as `gui-state-and-screenshots`.
 See the [agent protocol guide](docs/agent-harness.md).
 

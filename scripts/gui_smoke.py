@@ -37,19 +37,26 @@ def main():
         return shot['state']
 
     def click(control_id):
-        # Capture and then act on the matching snapshot, never guess global coordinates.
-        state = request('state')
-        control = next(control for control in state['controls'] if control['id'] == control_id)
-        assert control['enabled']
-        x, y, width, height = control['rect_pixels']
-        return request('click', '--x', x + width / 2, '--y', y + height / 2,
-                       '--snapshot', state['snapshot_id'])
+        # Layout can settle after selection or resizing; stale rejection guarantees
+        # that the rejected click did nothing, so recapture before retrying.
+        for attempt in range(5):
+            state = request('state')
+            control = next(control for control in state['controls'] if control['id'] == control_id)
+            assert control['enabled']
+            x, y, width, height = control['rect_pixels']
+            try:
+                return request('click', '--x', x + width / 2, '--y', y + height / 2,
+                               '--snapshot', state['snapshot_id'])
+            except RuntimeError as error:
+                if 'Stale snapshot' not in str(error) or attempt == 4:
+                    raise
 
     with tempfile.TemporaryDirectory(prefix='fyle-gui-fixture-') as temporary:
         fixture = Path(temporary)
         (fixture / 'alpha.txt').write_text('fixture alpha')
         (fixture / 'beta.txt').write_text('fixture beta')
         (fixture / 'folder').mkdir()
+        (fixture / 'engine.rs').write_text('fn main() { /* local peek fixture */ }\n')
         try:
             launched = run('launch', '--path', fixture)
             session = launched['session']
@@ -83,10 +90,48 @@ def main():
             assert Path(state['path']) == fixture / 'folder'
             assert state['total_entries'] == 0
             capture('05-empty-folder')
+            request('action', 'back')
+            request('wait')
+            state = click('lens:code')
+            assert state['query'].startswith('ext:rs,py')
+            assert [entry['name'] for entry in state['entries']] == ['engine.rs']
+            capture('06-code-lens')
+            state = click('lens:all')
+            request('key', '--key', 'Ctrl+P')
+            state = request('text', '--text', 'engrs')
+            assert state['palette']['open']
+            capture('07-fuzzy-jump')
+            request('key', '--key', 'Enter')
+            state = request('wait')
+            assert not state['palette']['open']
+            assert state['preview']['open'] and state['preview']['kind'] == 'text'
+            assert 'local peek fixture' in state['preview']['text']
+            capture('08-local-peek')
+            request('key', '--key', 'Ctrl+P')
+            request('text', '--text', '>view')
+            request('key', '--key', 'ArrowDown')
+            state = request('key', '--key', 'Enter')
+            assert state['view'] == 'list'
+            request('key', '--key', 'Ctrl+P')
+            state = request('key', '--key', 'Escape')
+            assert not state['palette']['open']
+            state = request('key', '--key', 'Space')
+            assert not state['preview']['open']
+            state = request('action', 'search', '--query', 'kind:file ext:rs -test size:<1kb')
+            assert [entry['name'] for entry in state['entries']] == ['engine.rs']
+            state = request('action', 'search', '--query', 'size:banana')
+            assert state['query_error'] and not state['entries']
+            click('clear_filters')
+            request('key', '--key', 'Ctrl+F')
+            state = request('text', '--text', 'alpha')
+            assert state['query'] == 'alpha'
+
             manifest = {'passed': True, 'session': session, 'checks': [
                 'actual renderer PNG capture', 'pixel row selection', 'pixel click and text filtering',
                 'keyboard select-all and backspace', 'pixel grid toggle',
-                'dialog text/Enter and background folder creation', 'navigation and empty state'],
+                'dialog text/Enter and background folder creation', 'navigation and empty state',
+                'composable lenses and invalid query feedback', 'fuzzy file jump and command dispatch',
+                'bounded asynchronous local text preview', 'palette Escape handling'],
                 'artifacts': sorted(path.name for path in args.output_dir.iterdir())}
             (args.output_dir / 'result.json').write_text(json.dumps(manifest, indent=2))
             print(json.dumps(manifest, indent=2))

@@ -113,3 +113,23 @@ are converted using pixels-per-point. Closing removes the descriptor.
 saves screenshots plus structured state. It also runs in CI with a software GL
 backend. This proves Fyle's own rendering/input path and does not assert native
 integration correctness on every window manager or permission environment.
+
+## Local discovery boundary
+
+`core/discovery.rs` compiles query terms into a headless predicate and ranks fuzzy
+names without I/O. The directory cache supplies lens results; invalid syntax
+matches nothing and exposes an inline explanation. Extension lists are ORed,
+other terms are ANDed and may be negated. `app/discovery.rs` owns palette/lens
+interaction and emits existing typed toolbar actions. Palette results are ranked
+only when opened or edited and limited to ten visible rows.
+
+`core/preview.rs` owns a single preview worker per window and bounded plain UTF-8
+reads. It rejects non-regular entries before opening; Unix additionally uses
+O_NOFOLLOW and O_NONBLOCK to reject a leaf symlink or a raced-in FIFO. An opened
+handle is checked again before reading. Ancestor directories may be symlinks;
+this is a read-only preview policy, not a filesystem sandbox. No content is
+executed, decoded as HTML/SVG, or sent to a network service. A generation change
+on selection/visibility changes discards stale replies. Worker I/O is not forcibly
+cancelled. The GUI shows loading/unsupported/error states rather than blocking
+rendering. Harness state includes palette/query/preview status and bounded preview
+text, so the actual interaction is inspectable by an explicitly attached agent.

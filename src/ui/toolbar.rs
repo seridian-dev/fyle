@@ -10,6 +10,9 @@ use std::path::Path;
 pub enum ToolbarAction {
     /// Navigate back.
     GoBack,
+    Refresh,
+    Jump,
+    TogglePreview,
     /// Navigate forward.
     GoForward,
     /// Navigate to parent directory.
@@ -38,7 +41,14 @@ fn render_toolbar_button(ui: &mut Ui, icon: &str, label: &str, color: Color32) -
     .stroke(Stroke::new(1.0_f32, color.linear_multiply(0.2)))
     .rounding(Rounding::same(4.0));
 
-    let response = ui.add(button);
+    let response = ui.add(button).on_hover_text(match label {
+        "JUMP" => "Ctrl+P · fuzzy files, bookmarks and commands",
+        "PEEK" => "Space · local read-only text preview",
+        "FOLDER" => "Create a folder here",
+        "FILE" => "Create an empty file here",
+        "TERM" => "Open your desktop terminal here",
+        _ => label,
+    });
     crate::ui::expose_control(ui, &label.to_ascii_lowercase(), label, &response);
 
     if response.hovered() {
@@ -166,6 +176,13 @@ pub fn render_toolbar(
         ui.separator();
         ui.add_space(8.0);
 
+        if render_toolbar_button(ui, "", "JUMP", colors::ELECTRIC_BLUE) {
+            action = Some(ToolbarAction::Jump);
+        }
+        if render_toolbar_button(ui, "", "PEEK", colors::CYBER_GREEN) {
+            action = Some(ToolbarAction::TogglePreview);
+        }
+
         // Create buttons
         if render_toolbar_button(ui, "📁", "FOLDER", colors::CYBER_GREEN) {
             action = Some(ToolbarAction::NewFolder);
@@ -197,7 +214,8 @@ pub fn render_toolbar(
 
         let search_response = ui.add(
             egui::TextEdit::singleline(search_query)
-                .hint_text("Filter files...")
+                .id(egui::Id::new("file_search"))
+                .hint_text("Name, ext:rs, size:>10mb…")
                 .desired_width(search_width)
                 .margin(Vec2::new(8.0, 4.0)),
         );

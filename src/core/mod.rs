@@ -9,3 +9,6 @@ pub use file_ops::*;
 pub use opener::*;
 pub mod job;
 pub mod loader;
+
+pub mod discovery;
+pub mod preview;

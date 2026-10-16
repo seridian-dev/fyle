@@ -1,6 +1,6 @@
 [package]
 name = "fyle"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 description = "A responsive desktop file manager with a testable Rust core"
 authors = ["Fyle Team"]
@@ -49,6 +49,9 @@ png = "0.17"
 
 # Optional: Trash support (enabled with --features trash)
 trash = { version = "4.0", optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3.10"

@@ -1,5 +1,6 @@
 mod actions;
 mod automation;
+mod discovery;
 mod render;
 use crate::theme::colors;
 use crate::ui::{
@@ -41,6 +42,13 @@ pub(crate) struct FileManager {
     sort_order: SortOrder,
     show_hidden: bool,
     search_query: String,
+    query_error: Option<String>,
+    palette: discovery::Palette,
+    preview_open: bool,
+    preview_path: Option<PathBuf>,
+    preview_loader: fyle::core::preview::PreviewLoader,
+    preview_loading: bool,
+    preview_result: Option<anyhow::Result<fyle::core::preview::Preview>>,
     selected_entries: HashSet<PathBuf>,
     bookmarks: Vec<Bookmark>,
     dialog: DialogType,
@@ -77,6 +85,13 @@ impl FileManager {
             sort_order: SortOrder::Ascending,
             show_hidden: true,
             search_query: String::new(),
+            query_error: None,
+            palette: Default::default(),
+            preview_open: false,
+            preview_path: None,
+            preview_loader: Default::default(),
+            preview_loading: false,
+            preview_result: None,
             selected_entries: HashSet::new(),
             bookmarks: load_bookmarks(),
             dialog: DialogType::None,
@@ -139,6 +154,9 @@ impl FileManager {
     }
 
     fn apply_filter(&mut self) {
+        self.query_error = fyle::core::discovery::Query::parse(&self.search_query)
+            .err()
+            .map(|error| error.to_string());
         self.entries = self.cached_entries.clone();
         filter_entries(&mut self.entries, &self.search_query);
         for entry in &mut self.entries {
@@ -183,8 +201,7 @@ impl FileManager {
     /// Navigate to parent directory.
     fn go_up(&mut self) {
         if let Some(parent) = self.current_path.parent() {
-            self.current_path = parent.to_path_buf();
-            self.load_entries();
+            self.navigate_to(parent.to_path_buf());
         }
     }
 

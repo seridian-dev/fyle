@@ -135,12 +135,10 @@ pub fn sort_entries(entries: &mut [FileEntry], sort_by: &SortBy, sort_order: &So
     });
 }
 
-/// Filter entries by search query (case-insensitive).
+/// Filter using local composable discovery lenses. Invalid queries match nothing.
 pub fn filter_entries(entries: &mut Vec<FileEntry>, search_query: &str) {
-    if search_query.is_empty() {
-        return;
+    match crate::core::discovery::Query::parse(search_query) {
+        Ok(query) => entries.retain(|entry| query.matches(entry)),
+        Err(_) => entries.clear(),
     }
-
-    let query_lower = search_query.to_lowercase();
-    entries.retain(|entry| entry.name.to_lowercase().contains(&query_lower));
 }
