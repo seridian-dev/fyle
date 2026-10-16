@@ -1,4 +1,7 @@
-use fyle::{desktop::select_terminal, startup::resolve_location};
+use fyle::{
+    desktop::select_terminal,
+    startup::{resolve_location, resolve_target},
+};
 
 #[test]
 fn desktop_policy_is_independent_of_init_system() {
@@ -31,6 +34,9 @@ fn file_urls_decode_spaces_and_unicode_and_files_open_parent() {
         resolve_location(url.as_str().as_ref()).unwrap(),
         dir.canonicalize().unwrap()
     );
+    let target = resolve_target(url.as_str().as_ref()).unwrap();
+    assert_eq!(target.directory, dir.canonicalize().unwrap());
+    assert_eq!(target.file, Some(file.canonicalize().unwrap()));
     assert_eq!(
         resolve_location(dir.as_os_str()).unwrap(),
         dir.canonicalize().unwrap()

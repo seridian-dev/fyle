@@ -1,6 +1,5 @@
 //! Fyle-styled context menu for file operations.
 
-use crate::core::open_with_recommended;
 use crate::theme::colors;
 use crate::types::FileEntry;
 use crate::ui::constants::CONTEXT_MENU_WIDTH;
@@ -12,7 +11,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ContextMenuAction {
     None,
-    Open,
+    OpenFile(PathBuf),
     Navigate(PathBuf),
     Copy,
     Cut,
@@ -22,7 +21,6 @@ pub enum ContextMenuAction {
     AddBookmark,
     OpenTerminal,
     Close,
-    OpenError(String),
 }
 
 fn menu_item(ui: &mut Ui, id: &str, label: &str, icon: Icon, accent: Color32) -> bool {
@@ -104,22 +102,22 @@ pub fn show_context_menu(ctx: &Context, pos: Pos2, target: &FileEntry) -> Contex
                     );
                     ui.add_space(3.0);
 
+                    let open_label = if crate::core::editor::is_text_candidate(&target.path) {
+                        "Open in Fyle"
+                    } else {
+                        "Open"
+                    };
                     if menu_item(
                         ui,
                         "context_open",
-                        "Open",
+                        open_label,
                         Icon::Open,
                         colors::ELECTRIC_BLUE,
                     ) {
                         if target.is_dir {
                             action = ContextMenuAction::Navigate(target.path.clone());
                         } else {
-                            match open_with_recommended(&target.path) {
-                                Ok(()) => action = ContextMenuAction::Open,
-                                Err(error) => {
-                                    action = ContextMenuAction::OpenError(error.to_string())
-                                }
-                            }
+                            action = ContextMenuAction::OpenFile(target.path.clone());
                         }
                     }
                     ui.separator();

@@ -1,5 +1,5 @@
 //! Virtualized file cards with a full-card target and font-independent icons.
-use crate::core::{format_size, open_with_recommended};
+use crate::core::format_size;
 use crate::theme::colors;
 use crate::types::FileEntry;
 use crate::ui::{icons, ViewAction};
@@ -103,8 +103,8 @@ fn card(ui: &mut Ui, entry: &FileEntry) -> Option<ViewAction> {
     } else if response.double_clicked() {
         if entry.is_dir {
             action = Some(ViewAction::Navigate(entry.path.clone()));
-        } else if let Err(error) = open_with_recommended(&entry.path) {
-            action = Some(ViewAction::OpenError(error.to_string()));
+        } else {
+            action = Some(ViewAction::OpenFile(entry.path.clone()));
         }
     } else if response.secondary_clicked() {
         if let Some(pos) = response.interact_pointer_pos() {

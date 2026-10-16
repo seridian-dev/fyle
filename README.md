@@ -8,7 +8,7 @@ An MIT-licensed Rust file manager with a cyberpunk control-console interface. Br
 filter, sort, bookmark, copy, move, rename and delete local files.
 Free to use, modify and share. No account or hosted service required.
 
-## Browsing workspace (0.9)
+## Browsing and editing workspace (0.10)
 
 A near-black instrument grid, electric cyan controls, amber folders, violet config
 files and mint documents give Fyle a sci-fi console feel. Quick Access and file
@@ -27,6 +27,12 @@ categories. Ctrl-click adds/removes selections in either view.
   file URLs. Enter a file path to visit its parent folder.
 - **Inspector:** Space toggles local peek; Wrap controls long lines. A compact
   status bar keeps the file viewport steady when selection changes.
+- **Built-in editor:** opening common text and source files starts Fyle's own
+  syntax-colored editor. It supports multiple document tabs, in-file search,
+  editing and `Ctrl+S`. Documents are limited to 2 MiB UTF-8; syntax coloring
+  pauses above 256 KiB. Binary files and links are declined. Save writes an
+  atomic sibling file and refuses to replace content changed by another app.
+  `fyle /path/to/source.rs` opens the file in the editor.
 - **Pinned places:** use + beside Pinned to bookmark the current folder;
   right-click a pin to remove it. Unconfigured OS user directories are disabled
   in Quick Access. `More` includes New file, Refresh and Open terminal;

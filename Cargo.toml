@@ -1,8 +1,8 @@
 [package]
 name = "fyle"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2021"
-description = "A responsive desktop file manager with a testable Rust core"
+description = "A cyberpunk desktop file manager and native source editor"
 authors = ["Fyle Team"]
 license = "MIT"
 repository = "https://github.com/seridian-dev/fyle"
@@ -12,8 +12,9 @@ categories = ["filesystem", "gui"]
 
 [features]
 default = ["gui", "trash"]
-gui = ["dep:eframe", "dep:egui", "dep:sysinfo"]
+gui = ["dep:eframe", "dep:egui", "dep:sysinfo", "syntax"]
 trash = ["dep:trash"]
+syntax = ["dep:syntect"]
 
 [dependencies]
 # GUI framework
@@ -49,6 +50,7 @@ png = "0.17"
 
 # Optional: Trash support (enabled with --features trash)
 trash = { version = "4.0", optional = true }
+syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

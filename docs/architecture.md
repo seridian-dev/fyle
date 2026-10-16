@@ -114,6 +114,19 @@ saves screenshots plus structured state. It also runs in CI with a software GL
 backend. This proves Fyle's own rendering/input path and does not assert native
 integration correctness on every window manager or permission environment.
 
+## Native source editor boundary
+
+`core/editor.rs` owns bounded UTF-8 document reads and conflict-aware saves. It
+rejects symlink/special-file entries, binary bytes and documents over 2 MiB. Save
+compares current bytes with the opened snapshot, writes and syncs a sibling temp
+file, and atomically renames it into place. This protects against ordinary
+outside edits but cannot promise safety against a writer racing the final rename.
+`app/editor.rs` owns session-local document tabs, edits, search, save state and
+Syntect language highlighting. Syntax work is capped at 256 KiB per document;
+larger documents remain editable as plain text. Text/source paths open in Fyle;
+binary/media paths continue through the desktop opener. Future Git review and
+LSP support remain separate features.
+
 ## Local discovery boundary
 
 `core/discovery.rs` compiles query terms into a headless predicate and ranks fuzzy

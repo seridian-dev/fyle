@@ -114,7 +114,12 @@ impl eframe::App for FileManager {
         self.poll_directory();
         self.poll_operation();
         self.poll_preview();
-        if self.loading || self.operation.is_some() {
+        self.editor.poll_worker();
+        if self.loading
+            || self.operation.is_some()
+            || self.editor.is_loading()
+            || self.editor.is_saving()
+        {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
         // Handle keyboard shortcuts
@@ -280,6 +285,7 @@ impl eframe::App for FileManager {
         self.render_palette(ctx);
         self.render_location(ctx);
         self.render_appearance(ctx);
+        self.editor.render(ctx);
         self.poll_preview();
         if self.preview_loading {
             ctx.request_repaint_after(std::time::Duration::from_millis(30));

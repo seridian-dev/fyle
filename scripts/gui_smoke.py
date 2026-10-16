@@ -71,11 +71,15 @@ def main():
         (fixture / 'alpha.txt').write_text('fixture alpha')
         (fixture / 'beta.txt').write_text('fixture beta')
         (fixture / 'folder').mkdir()
-        (fixture / 'engine.rs').write_text('fn main() { /* local peek fixture */ }\n')
+        (fixture / 'engine.rs').write_text('fn main() { /* local peek fixture */ }\n// local peek fixture again\n')
         try:
-            launched = run('launch', '--path', fixture)
+            launched = run('launch', '--path', fixture / 'engine.rs')
             session = launched['session']
             assert launched['state']['ready']
+            assert launched['state']['editor']['open']
+            assert launched['state']['editor']['items'][0]['language'] == 'Rust'
+            assert Path(launched['state']['editor']['items'][0]['path']) == fixture / 'engine.rs'
+            request('action', 'editor_close')
             capture('01-list')
             state = click('entry:alpha.txt')
             assert state['selected_count'] == 1
@@ -88,6 +92,31 @@ def main():
             capture('02-context-menu')
             state = click('context_copy')
             assert not state['context_menu']['visible']
+            state = request('action', 'edit_file', '--name', 'engine.rs')
+            assert state['editor']['open']
+            assert state['editor']['items'][0]['language'] == 'Rust'
+            capture('03-native-editor')
+            state = click('editor_find')
+            state = request('key', '--key', 'Ctrl+A')
+            state = request('text', '--text', 'local peek fixture', '--snapshot', state['snapshot_id'])
+            assert state['editor']['match_count'] == 2
+            state = click('editor_find_next')
+            assert state['editor']['match_index'] == 1
+            state = click('editor_text')
+            state = request('key', '--key', 'Ctrl+A')
+            state = request('text', '--text', 'fn main() { println!("edited in Fyle"); } // local peek fixture\n',
+                            '--snapshot', state['snapshot_id'])
+            assert state['editor']['items'][0]['dirty']
+            request('key', '--key', 'Ctrl+S')
+            state = request('wait')
+            assert not state['editor']['items'][0]['dirty']
+            assert 'edited in Fyle' in (fixture / 'engine.rs').read_text()
+            state = request('action', 'edit_file', '--name', 'beta.txt')
+            assert len(state['editor']['items']) == 2
+            state = click('editor_tab:0')
+            assert state['editor']['active'] == 0
+            request('action', 'editor_close')
+            assert not request('state')['editor']['open']
             state = click('search')
             state = request('text', '--text', 'alpha', '--snapshot', state['snapshot_id'])
             assert state['query'] == 'alpha'
@@ -98,8 +127,8 @@ def main():
             assert state['query'] == ''
             state = click('grid')
             assert state['view'] == 'grid'
-            state = click('entry:alpha.txt')
-            assert next(entry for entry in state['entries'] if entry['name']=='alpha.txt')['selected']
+            state = click('entry:beta.txt')
+            assert next(entry for entry in state['entries'] if entry['name']=='beta.txt')['selected']
             capture('03-grid')
             request('action', 'new_folder')
             state = click('dialog_name')
@@ -195,6 +224,7 @@ def main():
             manifest = {'passed': True, 'session': session, 'checks': [
                 'actual renderer PNG capture', 'pixel row selection', 'pixel click and text filtering',
                 'Fyle-styled context menu vector actions and Copy dispatch',
+                'in-app Rust syntax editing, Unicode-safe find navigation, document tabs and conflict-aware Ctrl+S save',
                 'keyboard select-all and backspace', 'pixel grid toggle',
                 'dialog text/Enter and background folder creation', 'navigation and empty state',
                 'composable lenses and invalid query feedback', 'fuzzy file jump and command dispatch',

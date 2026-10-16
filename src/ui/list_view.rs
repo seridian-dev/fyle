@@ -1,5 +1,5 @@
 //! Responsive, virtualized file list with shared header and row geometry.
-use crate::core::{format_size, open_with_recommended};
+use crate::core::format_size;
 use crate::theme::{colors, get_entry_color};
 use crate::types::{FileEntry, SortBy, SortOrder};
 use crate::ui::ViewAction;
@@ -165,10 +165,8 @@ pub fn render_list_view(
                 } else if row.double_clicked() {
                     if entry.is_dir {
                         actions.push(ViewAction::Navigate(entry.path.clone()));
-                    } else if let Err(error) = open_with_recommended(&entry.path) {
-                        actions.push(ViewAction::OpenError(format!(
-                            "Failed to open file: {error}"
-                        )));
+                    } else {
+                        actions.push(ViewAction::OpenFile(entry.path.clone()));
                     }
                 } else if row.secondary_clicked() {
                     if let Some(pos) = row.interact_pointer_pos() {

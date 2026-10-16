@@ -42,12 +42,12 @@ pub enum ViewAction {
     ToggleSelection(PathBuf),
     /// Select only this file.
     SelectSingle(PathBuf),
+    /// Open through Fyle's editor or an appropriate desktop application.
+    OpenFile(PathBuf),
     /// Show context menu.
     ShowContextMenu(Pos2, FileEntry),
     /// Change sort order.
     ChangeSort(SortBy),
-    /// Error occurred while opening file.
-    OpenError(String),
 }
 
 #[cfg(test)]

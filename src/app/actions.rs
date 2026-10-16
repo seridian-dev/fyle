@@ -1,7 +1,21 @@
 use super::*;
+use fyle::core::open_with_recommended;
 
 impl FileManager {
+    pub(super) fn open_file(&mut self, path: PathBuf) {
+        if fyle::core::editor::is_text_candidate(&path) {
+            if let Err(error) = self.editor.open(path) {
+                self.error_message = Some(format!("Cannot open in Fyle editor: {error:#}"));
+            }
+        } else if let Err(error) = open_with_recommended(&path) {
+            self.error_message = Some(format!("Failed to open file: {error}"));
+        }
+    }
+
     pub(super) fn handle_keyboard(&mut self, ctx: &egui::Context) {
+        if self.editor.is_open() {
+            return;
+        }
         if self.dialog == DialogType::None
             && !self.appearance_open
             && !self.palette.open
@@ -194,11 +208,11 @@ impl FileManager {
     pub(super) fn handle_view_action(&mut self, action: ViewAction) {
         match action {
             ViewAction::Navigate(path) => self.navigate_to(path),
+            ViewAction::OpenFile(path) => self.open_file(path),
             ViewAction::ToggleSelection(path) => self.toggle_selection(&path),
             ViewAction::SelectSingle(path) => self.select_single(&path),
             ViewAction::ShowContextMenu(pos, entry) => self.context_menu.show(pos, entry),
             ViewAction::ChangeSort(sort_by) => self.toggle_sort(sort_by),
-            ViewAction::OpenError(msg) => self.error_message = Some(msg),
         }
     }
 
@@ -206,7 +220,8 @@ impl FileManager {
     pub(super) fn handle_context_menu_action(&mut self, action: ContextMenuAction) {
         match action {
             ContextMenuAction::None => {}
-            ContextMenuAction::Open => {
+            ContextMenuAction::OpenFile(path) => {
+                self.open_file(path);
                 self.context_menu.hide();
             }
             ContextMenuAction::Navigate(path) => {
@@ -280,10 +295,6 @@ impl FileManager {
                 self.context_menu.hide();
             }
             ContextMenuAction::Close => {
-                self.context_menu.hide();
-            }
-            ContextMenuAction::OpenError(msg) => {
-                self.error_message = Some(msg);
                 self.context_menu.hide();
             }
         }

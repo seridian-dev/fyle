@@ -2,7 +2,13 @@
 use anyhow::{bail, Context, Result};
 use std::{ffi::OsStr, path::PathBuf};
 
-pub fn resolve_location(input: &OsStr) -> Result<PathBuf> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LaunchTarget {
+    pub directory: PathBuf,
+    pub file: Option<PathBuf>,
+}
+
+pub fn resolve_target(input: &OsStr) -> Result<LaunchTarget> {
     let path = if let Some(value) = input.to_str().filter(|s| s.starts_with("file:")) {
         let url = url::Url::parse(value)?;
         if url.host_str().is_some_and(|host| host != "localhost") {
@@ -20,12 +26,23 @@ pub fn resolve_location(input: &OsStr) -> Result<PathBuf> {
         .canonicalize()
         .with_context(|| format!("Cannot open {}", path.display()))?;
     if path.is_dir() {
-        Ok(path)
+        Ok(LaunchTarget {
+            directory: path,
+            file: None,
+        })
     } else {
-        path.parent()
-            .map(|p| p.to_path_buf())
-            .context("File has no parent directory")
+        Ok(LaunchTarget {
+            directory: path
+                .parent()
+                .map(PathBuf::from)
+                .context("File has no parent directory")?,
+            file: Some(path),
+        })
     }
+}
+
+pub fn resolve_location(input: &OsStr) -> Result<PathBuf> {
+    Ok(resolve_target(input)?.directory)
 }
 
 /// Respect the option terminator so a folder named --automation is not an opt-in.
@@ -35,7 +52,7 @@ pub fn automation_requested(args: impl IntoIterator<Item = std::ffi::OsString>) 
         .any(|arg| arg == "--automation")
 }
 
-pub fn parse_args() -> PathBuf {
+pub fn parse_args() -> LaunchTarget {
     let mut args = std::env::args_os().skip(1);
     let mut location = None;
     while let Some(arg) = args.next() {
@@ -49,8 +66,18 @@ pub fn parse_args() -> PathBuf {
                 std::process::exit(0);
             }
             Some("--automation") => {}
-            Some("--home") => location = dirs::home_dir(),
-            Some("--downloads") => location = dirs::download_dir(),
+            Some("--home") => {
+                location = dirs::home_dir().map(|path| LaunchTarget {
+                    directory: path,
+                    file: None,
+                })
+            }
+            Some("--downloads") => {
+                location = dirs::download_dir().map(|path| LaunchTarget {
+                    directory: path,
+                    file: None,
+                })
+            }
             Some("--") => {
                 if let Some(path) = args.next() {
                     location = Some(resolve_or_exit(&path));
@@ -64,12 +91,13 @@ pub fn parse_args() -> PathBuf {
             _ => location = Some(resolve_or_exit(&arg)),
         }
     }
-    location
-        .or_else(dirs::home_dir)
-        .unwrap_or_else(|| PathBuf::from("/"))
+    location.unwrap_or_else(|| LaunchTarget {
+        directory: dirs::home_dir().unwrap_or_else(|| PathBuf::from("/")),
+        file: None,
+    })
 }
-fn resolve_or_exit(input: &OsStr) -> PathBuf {
-    resolve_location(input).unwrap_or_else(|e| {
+fn resolve_or_exit(input: &OsStr) -> LaunchTarget {
+    resolve_target(input).unwrap_or_else(|e| {
         eprintln!("{e:#}");
         std::process::exit(2)
     })

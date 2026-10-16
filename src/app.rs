@@ -2,6 +2,7 @@ mod actions;
 mod appearance;
 mod automation;
 mod discovery;
+mod editor;
 mod render;
 mod workspace;
 use crate::theme::colors;
@@ -58,6 +59,7 @@ pub(crate) struct FileManager {
     search_query: String,
     query_error: Option<String>,
     palette: discovery::Palette,
+    editor: editor::Editor,
     preview_open: bool,
     preview_wrap: bool,
     preview_path: Option<PathBuf>,
@@ -79,6 +81,14 @@ pub(crate) struct FileManager {
 }
 
 impl FileManager {
+    pub(crate) fn new_with_target(target: fyle::startup::LaunchTarget) -> Self {
+        let mut app = Self::new(target.directory);
+        if let Some(file) = target.file {
+            app.open_file(file);
+        }
+        app
+    }
+
     pub(crate) fn new(initial_path: PathBuf) -> Self {
         let current_path = if initial_path.is_dir() {
             initial_path
@@ -119,6 +129,7 @@ impl FileManager {
             search_query: String::new(),
             query_error: None,
             palette: Default::default(),
+            editor: editor::Editor::default(),
             preview_open: false,
             preview_wrap: true,
             preview_path: None,
@@ -359,6 +370,17 @@ mod tests {
         app.search_query.clear();
         app.apply_filter();
         assert_eq!(app.entries[0].path, path);
+    }
+
+    #[test]
+    fn opening_source_files_stays_inside_fyle() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("main.rs");
+        std::fs::write(&path, "fn main() {}\n").unwrap();
+        let mut app = FileManager::new(dir.path().into());
+        app.open_file(path);
+        assert!(app.editor.is_open());
+        assert!(app.error_message.is_none());
     }
 }
 
