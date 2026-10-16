@@ -15,7 +15,7 @@ fn main() -> Result<(), eframe::Error> {
     // Parse command line arguments
     let automation = std::env::var("FYLE_AUTOMATION").as_deref() == Ok("1")
         || fyle::startup::automation_requested(std::env::args_os().skip(1));
-    let initial_path = parse_args();
+    let launch_target = parse_args();
 
     log::info!(
         "Starting Fyle v{} ({})",
@@ -38,7 +38,7 @@ fn main() -> Result<(), eframe::Error> {
         options,
         Box::new(move |cc| {
             setup_cyberpunk_theme(&cc.egui_ctx);
-            let mut app = FileManager::new(initial_path);
+            let mut app = FileManager::new_with_target(launch_target);
             app.initialize_appearance(&cc.egui_ctx, cc.gl.as_deref());
             if automation {
                 if let Err(error) = app.enable_automation(&cc.egui_ctx) {
