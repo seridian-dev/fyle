@@ -106,9 +106,10 @@ impl Server {
                         let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
                         let result = (|| -> Result<Reply> {
                             let mut line = String::new();
-                            BufReader::new(stream.try_clone()?)
-                                .take(64 * 1024)
-                                .read_line(&mut line)?;
+                            {
+                                let reader = BufReader::new(&mut stream);
+                                reader.take(64 * 1024).read_line(&mut line)?;
+                            }
                             let input: Value = serde_json::from_str(&line)?;
                             let provided = input["token"].as_str().unwrap_or("");
                             let valid = provided.len() == token.len()
