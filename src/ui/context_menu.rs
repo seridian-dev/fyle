@@ -1,122 +1,192 @@
-//! Context menu component for file operations.
+//! Fyle-styled context menu for file operations.
 
 use crate::core::open_with_recommended;
 use crate::theme::colors;
 use crate::types::FileEntry;
 use crate::ui::constants::CONTEXT_MENU_WIDTH;
-use eframe::egui::{self, Context, Pos2, Stroke};
+use crate::ui::icons::{self, Icon};
+use eframe::egui::{self, Color32, Context, Pos2, Stroke, Ui};
 use std::path::PathBuf;
 
 /// Actions that can be triggered from the context menu.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ContextMenuAction {
-    /// No action taken.
     None,
-    /// Open the file/directory.
     Open,
-    /// Navigate to directory.
     Navigate(PathBuf),
-    /// Copy to clipboard.
     Copy,
-    /// Cut to clipboard.
     Cut,
-    /// Initiate rename.
     Rename,
-    /// Delete the item.
     Delete,
-    /// Show properties dialog.
     Properties,
-    /// Add to bookmarks.
     AddBookmark,
-    /// Open in terminal.
     OpenTerminal,
-    /// Close the menu.
     Close,
-    /// Open failed with error.
     OpenError(String),
 }
 
+fn menu_item(ui: &mut Ui, id: &str, label: &str, icon: Icon, accent: Color32) -> bool {
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 29.0), egui::Sense::click());
+    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, false, label));
+
+    let fill = if response.is_pointer_button_down_on() {
+        Color32::from_rgb(10, 51, 66)
+    } else if response.hovered() || response.has_focus() {
+        colors::MIDNIGHT_PURPLE
+    } else {
+        Color32::TRANSPARENT
+    };
+    ui.painter().rect_filled(rect, 2.0, fill);
+    if response.hovered() || response.has_focus() {
+        ui.painter().rect_stroke(
+            rect,
+            2.0,
+            Stroke::new(1.0_f32, accent.linear_multiply(0.75)),
+        );
+        ui.painter().rect_filled(
+            egui::Rect::from_min_max(rect.min, egui::pos2(rect.left() + 2.0, rect.bottom())),
+            0.0,
+            accent,
+        );
+    }
+    icons::paint(
+        ui.painter(),
+        egui::Rect::from_center_size(
+            egui::pos2(rect.left() + 17.0, rect.center().y),
+            egui::vec2(16.0, 16.0),
+        ),
+        icon,
+        if response.hovered() {
+            accent
+        } else {
+            colors::MUTED
+        },
+    );
+    ui.painter().text(
+        egui::pos2(rect.left() + 34.0, rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        label,
+        egui::FontId::monospace(12.0),
+        if response.hovered() {
+            colors::TEXT
+        } else {
+            colors::TEXT.linear_multiply(0.88)
+        },
+    );
+    crate::ui::expose_control(ui, id, label, &response);
+    response.clicked()
+}
+
 /// Show the context menu for a file entry.
-///
-/// Returns the action selected, or `ContextMenuAction::None` if the menu is still open.
 pub fn show_context_menu(ctx: &Context, pos: Pos2, target: &FileEntry) -> ContextMenuAction {
     let mut action = ContextMenuAction::None;
+    let mut menu_rect = egui::Rect::NOTHING;
 
     egui::Area::new(egui::Id::new("context_menu"))
         .fixed_pos(pos)
+        .order(egui::Order::Foreground)
         .show(ctx, |ui| {
-            egui::Frame::none()
-                .fill(colors::DARK_SLATE)
-                .stroke(Stroke::new(1.0_f32, colors::ELECTRIC_BLUE))
-                .inner_margin(4.0)
+            let response = egui::Frame::none()
+                .fill(colors::DEEP_CHARCOAL)
+                .stroke(Stroke::new(
+                    1.0_f32,
+                    colors::ELECTRIC_BLUE.linear_multiply(0.8),
+                ))
+                .inner_margin(egui::Margin::same(5.0))
                 .show(ui, |ui| {
                     ui.set_width(CONTEXT_MENU_WIDTH);
+                    ui.label(
+                        egui::RichText::new("// FILE ACTIONS")
+                            .monospace()
+                            .size(9.0)
+                            .color(colors::ELECTRIC_BLUE),
+                    );
+                    ui.add_space(3.0);
 
-                    // Open button
-                    if ui.button("Open").clicked() {
+                    if menu_item(
+                        ui,
+                        "context_open",
+                        "Open",
+                        Icon::Open,
+                        colors::ELECTRIC_BLUE,
+                    ) {
                         if target.is_dir {
                             action = ContextMenuAction::Navigate(target.path.clone());
                         } else {
                             match open_with_recommended(&target.path) {
                                 Ok(()) => action = ContextMenuAction::Open,
-                                Err(e) => action = ContextMenuAction::OpenError(e.to_string()),
+                                Err(error) => {
+                                    action = ContextMenuAction::OpenError(error.to_string())
+                                }
                             }
                         }
                     }
-
                     ui.separator();
-
-                    // Copy button
-                    if ui.button("Copy").clicked() {
+                    if menu_item(ui, "context_copy", "Copy", Icon::Copy, colors::CYBER_GREEN) {
                         action = ContextMenuAction::Copy;
                     }
-
-                    // Cut button
-                    if ui.button("Cut").clicked() {
+                    if menu_item(ui, "context_cut", "Cut", Icon::Cut, colors::AMBER) {
                         action = ContextMenuAction::Cut;
                     }
-
-                    // Rename button
-                    if ui.button("Rename").clicked() {
+                    if menu_item(
+                        ui,
+                        "context_rename",
+                        "Rename",
+                        Icon::Rename,
+                        colors::ELECTRIC_BLUE,
+                    ) {
                         action = ContextMenuAction::Rename;
                     }
-
                     ui.separator();
-
-                    // Delete button
-                    if ui.button("Delete").clicked() {
+                    if menu_item(
+                        ui,
+                        "context_delete",
+                        "Delete",
+                        Icon::Delete,
+                        colors::CRIMSON,
+                    ) {
                         action = ContextMenuAction::Delete;
                     }
-
                     ui.separator();
-
-                    // Properties button
-                    if ui.button("Properties").clicked() {
+                    if menu_item(
+                        ui,
+                        "context_properties",
+                        "Properties",
+                        Icon::Properties,
+                        colors::CYBER_GREEN,
+                    ) {
                         action = ContextMenuAction::Properties;
                     }
-
-                    // Add to Bookmarks button
-                    if ui.button("Add to Bookmarks").clicked() {
+                    if menu_item(
+                        ui,
+                        "context_bookmark",
+                        "Add to Bookmarks",
+                        Icon::Bookmark,
+                        colors::AMBER,
+                    ) {
                         action = ContextMenuAction::AddBookmark;
                     }
-
-                    // Open in Terminal button
-                    if ui.button("Open in Terminal").clicked() {
+                    if menu_item(
+                        ui,
+                        "context_terminal",
+                        "Open in Terminal",
+                        Icon::Terminal,
+                        colors::MAGENTA,
+                    ) {
                         action = ContextMenuAction::OpenTerminal;
                     }
                 });
+            menu_rect = response.response.rect;
         });
 
-    // Close context menu on click outside
-    if ctx.input(|i| i.pointer.primary_clicked()) {
-        let menu_rect = egui::Rect::from_min_size(pos, egui::vec2(CONTEXT_MENU_WIDTH, 200.0));
-        if let Some(pointer_pos) = ctx.input(|i| i.pointer.interact_pos()) {
+    if ctx.input(|input| input.pointer.primary_clicked()) {
+        if let Some(pointer_pos) = ctx.input(|input| input.pointer.interact_pos()) {
             if !menu_rect.contains(pointer_pos) && action == ContextMenuAction::None {
                 return ContextMenuAction::Close;
             }
         }
     }
-
     action
 }
 
@@ -129,14 +199,12 @@ pub struct ContextMenuState {
 }
 
 impl ContextMenuState {
-    /// Show the context menu at the given position for the target entry.
     pub fn show(&mut self, pos: Pos2, target: FileEntry) {
         self.visible = true;
         self.position = pos;
         self.target = Some(target);
     }
 
-    /// Hide the context menu.
     pub fn hide(&mut self) {
         self.visible = false;
         self.target = None;

@@ -53,6 +53,18 @@ def main():
                 if 'Stale snapshot' not in str(error) or attempt == 4:
                     raise
 
+    def right_click(control_id):
+        for attempt in range(5):
+            state = request('state')
+            control = next(control for control in state['controls'] if control['id'] == control_id)
+            x, y, width, height = control['rect_pixels']
+            try:
+                return request('click', '--button', 'right', '--x', x + width / 2,
+                               '--y', y + height / 2, '--snapshot', state['snapshot_id'])
+            except RuntimeError as error:
+                if 'Stale snapshot' not in str(error) or attempt == 4:
+                    raise
+
     with tempfile.TemporaryDirectory(prefix='fyle-gui-fixture-') as temporary:
         fixture = Path(temporary)
         run_env['FYLE_SETTINGS_DIR'] = str(fixture / '.appearance-fixture')
@@ -68,6 +80,14 @@ def main():
             state = click('entry:alpha.txt')
             assert state['selected_count'] == 1
             assert next(entry for entry in state['entries'] if entry['name'] == 'alpha.txt')['selected']
+            state = right_click('entry:alpha.txt')
+            assert state['context_menu']['visible']
+            menu_items = {control['id'] for control in state['controls']}
+            assert {'context_open', 'context_copy', 'context_cut', 'context_delete',
+                    'context_terminal'} <= menu_items
+            capture('02-context-menu')
+            state = click('context_copy')
+            assert not state['context_menu']['visible']
             state = click('search')
             state = request('text', '--text', 'alpha', '--snapshot', state['snapshot_id'])
             assert state['query'] == 'alpha'
@@ -174,6 +194,7 @@ def main():
 
             manifest = {'passed': True, 'session': session, 'checks': [
                 'actual renderer PNG capture', 'pixel row selection', 'pixel click and text filtering',
+                'Fyle-styled context menu vector actions and Copy dispatch',
                 'keyboard select-all and backspace', 'pixel grid toggle',
                 'dialog text/Enter and background folder creation', 'navigation and empty state',
                 'composable lenses and invalid query feedback', 'fuzzy file jump and command dispatch',

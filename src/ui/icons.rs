@@ -23,6 +23,12 @@ pub enum Icon {
     Drive,
     Plus,
     Peek,
+    Open,
+    Copy,
+    Cut,
+    Rename,
+    Delete,
+    Properties,
 }
 pub fn paint(p: &Painter, rect: Rect, icon: Icon, color: Color32) {
     let rect = rect.shrink(rect.width() * 0.08);
@@ -170,6 +176,43 @@ pub fn paint(p: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 (1., 12.),
             ]);
             p.circle_stroke(point(12., 12.), rect.width() / 6., stroke);
+        }
+        Icon::Open => {
+            box_at(3., 3., 18., 18.);
+            line(&[(8., 16.), (17., 7.), (11., 7.), (17., 7.), (17., 13.)]);
+        }
+        Icon::Copy => {
+            box_at(7., 7., 14., 15.);
+            line(&[(4., 16.), (3., 16.), (3., 3.), (16., 3.), (16., 4.)]);
+        }
+        Icon::Cut => {
+            p.circle_stroke(point(6., 18.), rect.width() / 8., stroke);
+            p.circle_stroke(point(6., 6.), rect.width() / 8., stroke);
+            line(&[(8., 8.), (20., 20.)]);
+            line(&[(8., 16.), (20., 4.)]);
+        }
+        Icon::Rename => {
+            line(&[
+                (4., 20.),
+                (8., 19.),
+                (20., 7.),
+                (17., 4.),
+                (5., 16.),
+                (4., 20.),
+            ]);
+            line(&[(15., 6.), (18., 9.)]);
+        }
+        Icon::Delete => {
+            line(&[(4., 7.), (20., 7.)]);
+            line(&[(9., 4.), (15., 4.)]);
+            line(&[(6., 7.), (7., 21.), (17., 21.), (18., 7.)]);
+            line(&[(10., 10.), (10., 18.)]);
+            line(&[(14., 10.), (14., 18.)]);
+        }
+        Icon::Properties => {
+            p.circle_stroke(point(12., 12.), rect.width() * 0.42, stroke);
+            p.circle_filled(point(12., 7.), rect.width() * 0.055, color);
+            line(&[(12., 11.), (12., 17.)]);
         }
     }
 }
