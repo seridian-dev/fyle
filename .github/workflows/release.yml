@@ -71,6 +71,7 @@ jobs:
         if: matrix.platform == 'linux'
         with:
           go-version: "1.26.4"
+          cache: false
       - name: Install pinned nFPM
         if: matrix.platform == 'linux'
         run: |
@@ -85,11 +86,14 @@ jobs:
         shell: bash
         run: |
           cargo build --locked --release --bins
-          mkdir -p dist/fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}/bin
-          install -m 0755 target/release/fyle dist/fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}/bin/fyle
-          install -m 0755 target/release/fyle-cli dist/fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}/bin/fyle-cli
-          install -m 0644 LICENSE README.md dist/fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}/
-          tar -C dist -czf dist/fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}.tar.gz fyle-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH="${{ matrix.arch }}"
+          BUNDLE="fyle-${VERSION}-macos-${ARCH}"
+          mkdir -p "dist/${BUNDLE}/bin"
+          install -m 0755 target/release/fyle "dist/${BUNDLE}/bin/fyle"
+          install -m 0755 target/release/fyle-cli "dist/${BUNDLE}/bin/fyle-cli"
+          install -m 0644 LICENSE README.md "dist/${BUNDLE}/"
+          tar -C dist -czf "dist/${BUNDLE}.tar.gz" "$BUNDLE"
       - name: Build Windows binaries
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -130,7 +134,7 @@ jobs:
           test -n "$(find dist -maxdepth 1 -type f -print -quit)"
           find dist -maxdepth 1 -type f -printf '%f\n' | sort
           cd dist
-          sha256sum * > SHA256SUMS
+          sha256sum -- * > SHA256SUMS
       - name: Attest release assets
         uses: actions/attest-build-provenance@v4
         with:
