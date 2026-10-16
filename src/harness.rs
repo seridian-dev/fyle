@@ -102,6 +102,9 @@ impl Server {
             while !stop.load(Ordering::Relaxed) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Some platforms inherit the listener's nonblocking mode
+                        // on accepted sockets; request reads must honor the timeout.
+                        let _ = stream.set_nonblocking(false);
                         let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
                         let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
                         let result = (|| -> Result<Reply> {
