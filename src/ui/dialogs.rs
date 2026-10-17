@@ -106,10 +106,9 @@ pub fn show_copy_dialog(ctx: &Context, sources: &[PathBuf], destination: &Path) 
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
-                if ui
-                    .button(RichText::new("Copy").color(colors::CYBER_GREEN))
-                    .clicked()
-                {
+                let response = ui.button(RichText::new("Copy").color(colors::CYBER_GREEN));
+                crate::ui::expose_control(ui, "copy_confirm", "Confirm copy", &response);
+                if response.clicked() {
                     result = DialogResult::Execute(FileOperation::Copy(
                         sources.to_vec(),
                         destination.to_path_buf(),

@@ -45,6 +45,15 @@ errors and refreshes the directory afterward. Only successful Move jobs clear
 the cut clipboard. Trash behavior is selected by the feature at this boundary;
 there is no destructive fallback. No filesystem mutation runs in a view renderer.
 
+## Native desktop validation
+
+`scripts/native_desktop_smoke.py` attaches only to an explicitly launched Fyle
+GUI session through the authenticated local harness. It records active distro,
+desktop/session, init, display backend and scaling evidence, then exercises
+space/Unicode file URLs, app text routing, internal copy/paste, renderer capture
+and PTY lifecycle. It tests the current host only; Xvfb CI and installed desktop
+packages are not evidence for another running desktop or init system.
+
 DirectoryLoader owns one scan worker. Requests have generation numbers, queued
 superseded requests are skipped, and the UI discards old responses. Workers are
 not forcibly cancelled mid-I/O. A window owns its cache, loader and operation;
