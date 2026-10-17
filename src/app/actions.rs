@@ -13,6 +13,12 @@ impl FileManager {
     }
 
     pub(super) fn handle_keyboard(&mut self, ctx: &egui::Context) {
+        if self.terminal.is_open() {
+            if ctx.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl && i.modifiers.alt) {
+                self.terminal.toggle(&self.current_path);
+            }
+            return;
+        }
         if ctx.input_mut(|i| {
             i.consume_key(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::G)
         }) {
@@ -126,9 +132,7 @@ impl FileManager {
 
         // Ctrl+T - Open terminal
         if ctx.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl && i.modifiers.alt) {
-            if let Err(e) = open_terminal(&self.current_path) {
-                self.error_message = Some(e.to_string());
-            }
+            self.terminal.toggle(&self.current_path);
         }
 
         // F5 - Refresh
@@ -173,9 +177,7 @@ impl FileManager {
                 self.apply_filter();
             }
             ToolbarAction::OpenTerminal => {
-                if let Err(e) = open_terminal(&self.current_path) {
-                    self.error_message = Some(e.to_string());
-                }
+                self.terminal.toggle(&self.current_path);
             }
         }
     }
@@ -300,9 +302,7 @@ impl FileManager {
                     self.current_path.clone()
                 };
 
-                if let Err(e) = open_terminal(&path) {
-                    self.error_message = Some(e.to_string());
-                }
+                self.terminal.toggle(&path);
                 self.context_menu.hide();
             }
             ContextMenuAction::Close => {

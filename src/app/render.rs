@@ -289,6 +289,7 @@ impl eframe::App for FileManager {
         self.render_appearance(ctx);
         self.editor.render(ctx);
         self.review.render(ctx, self.current_path.clone());
+        self.terminal.render(ctx, &self.current_path);
         self.poll_preview();
         if self.preview_loading {
             ctx.request_repaint_after(std::time::Duration::from_millis(30));

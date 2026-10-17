@@ -130,3 +130,16 @@ Appearance state exposes open/settings/shader_available/shader_error. Use
 `appearance_reset` and `appearance_save` controls to inspect real live settings.
 The GUI smoke isolates FYLE_SETTINGS_DIR and verifies settings persistence without
 modifying the user's theme. It asserts actual GL shader compilation succeeded.
+
+### Embedded terminal (0.11)
+
+`gui action terminal_open` opens the app-owned PTY in the current folder;
+`terminal_new` starts another terminal tab (up to eight);
+`terminal_select --name INDEX` changes the active session;
+`terminal_send --command 'pwd'` sends one newline-terminated command;
+`terminal_close_active` ends the selected shell, and `terminal_close` ends all
+terminal sessions. State exposes `terminal.open`, active session, per-session
+PID/label, dimensions and a bounded VT screen snapshot. Hiding the window keeps
+all PTYs alive. Commands run in the user shell with normal user authority;
+the harness is opt-in, authenticated and loopback-only, and does not control
+other processes or windows.

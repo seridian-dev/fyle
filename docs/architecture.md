@@ -185,3 +185,25 @@ eframe's context current. Compilation errors retain a static background.
 Animation is capped at 20 FPS, runs only while focused and is frozen in automation
 sessions. Effects/motion can be disabled independently; UI scale and highlight
 changes do not replace the original file-category colors.
+
+## Embedded terminal boundary
+
+`core/terminal.rs` is an optional `terminal` feature using portable PTY and VT
+screen-model dependencies. GUI builds enable it; the headless CLI does not link
+those dependencies. `app/terminal.rs` owns GUI sessions, rendering and the
+small agent-harness command surface. Each PTY owns a shell child, child-local
+working directory, writer and reader thread; closing the session sends HUP to
+that PTY's process group on Unix and terminates its shell. It does not signal
+other Fyle binaries or desktop processes. Up to eight independent PTYs are held
+as session tabs; hiding the panel retains all sessions, and closing one/all
+sessions ends only those PTY process groups. No background service, global cwd/environment
+mutation, or cross-binary IPC is involved. Existing GUI automation remains the
+only binary-to-GUI IPC, using authenticated loopback and explicit opt-in.
+
+The VT parser maintains a 2,000-row scrollback with bounded reads and resizable
+screen dimensions. Focused GUI input forwards text, control keys and common
+navigation sequences to the PTY, so shell editing and keyboard-driven TUIs can
+run in the embedded surface. ANSI foreground/background colors are painted as
+cell runs and the cursor is visible. Terminal mouse reports and clipboard
+selection remain follow-up work; this is not complete emulator compatibility
+yet.

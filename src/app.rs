@@ -5,6 +5,7 @@ mod discovery;
 mod editor;
 mod render;
 mod review;
+mod terminal;
 mod workspace;
 use crate::theme::colors;
 use crate::ui::{
@@ -21,8 +22,8 @@ use crate::ui::{
     ViewAction,
 };
 use fyle::core::{
-    add_bookmark, filter_entries, format_size, load_bookmarks, open_terminal, remove_bookmark,
-    save_bookmarks, sort_entries,
+    add_bookmark, filter_entries, format_size, load_bookmarks, remove_bookmark, save_bookmarks,
+    sort_entries,
 };
 use fyle::types::{
     Bookmark, ClipboardOperation, DialogType, FileEntry, SortBy, SortOrder, ViewMode,
@@ -62,6 +63,7 @@ pub(crate) struct FileManager {
     palette: discovery::Palette,
     editor: editor::Editor,
     review: review::Review,
+    terminal: terminal::TerminalPanel,
     preview_open: bool,
     preview_wrap: bool,
     preview_path: Option<PathBuf>,
@@ -133,6 +135,7 @@ impl FileManager {
             palette: Default::default(),
             editor: editor::Editor::default(),
             review: review::Review::default(),
+            terminal: terminal::TerminalPanel::default(),
             preview_open: false,
             preview_wrap: true,
             preview_path: None,

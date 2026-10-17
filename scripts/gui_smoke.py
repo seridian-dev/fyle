@@ -269,6 +269,25 @@ def main():
             state = request('wait')
             assert '+fn unicode_untracked() {}' in state['review']['diff']
             capture('11-git-code-review')
+            state = request('action', 'terminal_open')
+            assert state['terminal']['open'] and state['terminal']['running']
+            state = request('action', 'terminal_new')
+            assert len(state['terminal']['sessions']) == 2
+            state = request('action', 'terminal_close_active')
+            assert len(state['terminal']['sessions']) == 1 and state['terminal']['running']
+            state = click('terminal_screen')
+            request('text', '--text', 'printf FYLE_HARNESS_TERMINAL_OK')
+            request('key', '--key', 'Enter')
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                state = request('state')
+                if 'FYLE_HARNESS_TERMINAL_OK' in state['terminal']['screen']:
+                    break
+                time.sleep(0.05)
+            assert 'FYLE_HARNESS_TERMINAL_OK' in state['terminal']['screen']
+            capture('12-embedded-terminal')
+            state = request('action', 'terminal_close')
+            assert not state['terminal']['running']
             request('key', '--key', 'Escape')
 
 
@@ -277,6 +296,7 @@ def main():
                 'Fyle-styled context menu vector actions and Copy dispatch',
                 'in-app Rust syntax editing, Unicode-safe find navigation, document tabs and conflict-aware Ctrl+S save',
                 'read-only staged and working diffs, untracked Unicode file review, and bounded Git status',
+                'app-owned PTY command execution, VT screen state, screenshot capture and explicit shell shutdown',
                 'keyboard select-all and backspace', 'pixel grid toggle',
                 'dialog text/Enter and background folder creation', 'navigation and empty state',
                 'composable lenses and invalid query feedback', 'fuzzy file jump and command dispatch',

@@ -79,6 +79,7 @@ impl FileManager {
             "preview":{"open":self.preview_open,"wrap":self.preview_wrap,"loading":self.preview_loading,"path":self.preview_path,"kind":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {..}))=>"text",Some(Ok(_))=>"unsupported",Some(Err(_))=>"error",None=>"none" },"text":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {text,..}))=>Some(text),_=>None }},
             "editor":self.editor.automation_state(),
             "review":self.review.automation_state(),
+            "terminal":self.terminal.state(),
             "dialog": match &self.dialog { DialogType::None => "none", DialogType::ConfirmDelete(..) => "confirm_delete", DialogType::ConfirmCopy(..) => "confirm_copy", DialogType::ConfirmMove(..) => "confirm_move", DialogType::FileProperties(..) => "properties", DialogType::CreateFolder => "create_folder", DialogType::CreateFile => "create_file", DialogType::Rename(..) => "rename" }, "error":self.error_message,
             "total_entries":self.entries.len(), "entry_offset":offset, "entries":entries,
             "selected_count":self.selected_entries.len(), "can_go_back":!self.history.is_empty(), "can_go_forward":!self.forward_history.is_empty(),
@@ -227,6 +228,12 @@ impl FileManager {
                 self.review.open(self.current_path.clone());
             }
             "review_refresh" => self.review.refresh(self.current_path.clone()),
+            "terminal_open" => self.terminal.open(&self.current_path),
+            "terminal_new" => self.terminal.new_session(&self.current_path),
+            "terminal_select" => self.terminal.select(text("name")?.parse()?)?,
+            "terminal_close" => self.terminal.close(),
+            "terminal_close_active" => self.terminal.close_active(),
+            "terminal_send" => self.terminal.send_command(text("command")?)?,
             "review_select" => self
                 .review
                 .select(std::path::PathBuf::from(text("path")?))?,
