@@ -25,7 +25,7 @@
           version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
-          nativeBuildInputs = [ pkgs.makeWrapper pkgs.pkg-config ];
+          nativeBuildInputs = [ pkgs.git pkgs.makeWrapper pkgs.pkg-config ];
           buildInputs = graphicsLibraries;
 
           postInstall = ''
