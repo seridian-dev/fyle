@@ -66,7 +66,7 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev pkg-config
+          sudo apt-get install -y curl dbus-daemon flatpak flatpak-builder libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev pkg-config
       - uses: actions/setup-go@v7
         if: matrix.platform == 'linux'
         with:
@@ -81,6 +81,14 @@ jobs:
         if: matrix.platform == 'linux'
         shell: bash
         run: scripts/package_linux.sh "${GITHUB_REF_NAME#v}" "${{ matrix.arch }}"
+      - name: Build AppImage
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: scripts/package_appimage.sh "${GITHUB_REF_NAME#v}" "${{ matrix.arch }}"
+      - name: Build Flatpak bundle
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: scripts/package_flatpak.sh "${GITHUB_REF_NAME#v}" "${{ matrix.arch }}"
       - name: Build macOS binaries
         if: matrix.platform == 'macos'
         shell: bash
@@ -127,6 +135,15 @@ jobs:
           pattern: release-*
           path: dist
           merge-multiple: true
+      - name: Build Gentoo overlay package
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          python3 scripts/package_gentoo_overlay.py "$VERSION" \
+            "dist/fyle-${VERSION}-linux-x86_64.tar.gz" \
+            "dist/fyle-${VERSION}-linux-aarch64.tar.gz" \
+            "dist/fyle-gentoo-overlay-${VERSION}.tar.gz"
       - name: Verify and checksum release assets
         shell: bash
         run: |

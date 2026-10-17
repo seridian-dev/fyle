@@ -164,24 +164,38 @@ pub fn managed_root() -> PathBuf {
         })
 }
 pub fn doctor() -> Value {
-    let present = |key| std::env::var_os(key).is_some();
+    let present = |key| std::env::var_os(key).is_some_and(|value| !value.is_empty());
     let pid1 = read_bounded(Path::new("/proc/1/comm"), 128)
         .ok()
         .map(|s| s.trim().to_owned());
-    let init = if Path::new("/run/openrc").exists() {
-        "openrc".into()
-    } else {
-        pid1.unwrap_or_else(|| "unknown".into())
-    };
+    let openrc_marker = Path::new("/run/openrc").exists();
+    let init_process = pid1.unwrap_or_else(|| "unknown".to_owned());
+    let init_system = crate::desktop::detect_init_system(openrc_marker, &init_process);
+    let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+    let session_desktop = std::env::var("XDG_SESSION_DESKTOP").unwrap_or_default();
+    let session_type = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
+    let wayland_present = present("WAYLAND_DISPLAY");
+    let display_present = present("DISPLAY");
+    let session = crate::desktop::detect_session(
+        &desktop,
+        &session_desktop,
+        &session_type,
+        present("HYPRLAND_INSTANCE_SIGNATURE"),
+        present("SWAYSOCK"),
+        wayland_present,
+        display_present,
+    );
     json!({
         "version": env!("CARGO_PKG_VERSION"), "revision": revision(),
         "os": std::env::consts::OS, "arch": std::env::consts::ARCH,
         "build": if cfg!(debug_assertions) { "debug" } else { "release" },
         "features": { "gui": cfg!(feature = "gui"), "trash": cfg!(feature = "trash") },
-        "desktop": std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default(),
-        "session_type": std::env::var("XDG_SESSION_TYPE").unwrap_or_default(),
-        "display_present": present("DISPLAY"), "wayland_present": present("WAYLAND_DISPLAY"),
-        "dbus_session_present": present("DBUS_SESSION_BUS_ADDRESS"), "init_process": init,
+        "desktop": desktop, "session_desktop": session_desktop,
+        "desktop_environment": session.environment.as_str(),
+        "session_type": session_type, "display_backend": session.display.as_str(),
+        "display_present": display_present, "wayland_present": wayland_present,
+        "dbus_session_present": present("DBUS_SESSION_BUS_ADDRESS"),
+        "init_system": init_system, "init_process": init_process,
         "terminal": crate::core::get_system_terminal(),
         "xdg_open_available": crate::core::is_application_available("xdg-open"),
         "diagnostics_directory": DiagnosticsStore::default().root,

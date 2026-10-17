@@ -88,7 +88,8 @@ resources. F5 refreshes the folder and its selected-file preview after reselecti
 
 Prebuilt binaries are attached to tagged [GitHub releases](https://github.com/seridian-dev/fyle/releases).
 Linux releases include x86_64 and ARM64 tarballs, Debian/Ubuntu `.deb`,
-Fedora/openSUSE `.rpm`, and Arch Linux pacman packages. The Linux binaries are
+Fedora/openSUSE `.rpm`, Arch Linux pacman packages, Nix, Flatpak, AppImage and a
+Gentoo overlay. The Linux binaries are
 built on Ubuntu 22.04 and require glibc 2.35 or newer plus the system graphics
 libraries listed in [release installation notes](docs/releases.md). The tarball
 avoids a package manager, but it does not bundle those system libraries. Alpine
@@ -217,11 +218,15 @@ See the [agent protocol guide](docs/agent-harness.md).
 ## Linux desktops and init systems
 
 Fyle launches directly in an existing graphical session on either systemd or
-OpenRC; no service is installed. It uses eframe's Wayland/X11 backends. KDE
-Plasma prefers Konsole, Ubuntu/GNOME prefers GNOME Terminal, and Hyprland/Sway
-prefer Foot, with installed-terminal fallbacks. Set `TERMINAL` to an executable
-path to override selection. All terminals inherit the selected directory
-without changing Fyle's process working directory.
+OpenRC; no service is installed. It uses eframe's Wayland/X11 backends. Fyle
+recognizes Plasma, GNOME, Hyprland, Sway, XFCE, Cinnamon, MATE, LXQt and COSMIC
+from the XDG desktop variables, with compositor environment hints for Hyprland
+and Sway. It detects Wayland or X11 from `XDG_SESSION_TYPE`, then falls back to
+the display socket variables. Plasma prefers Konsole, GNOME prefers Console
+(`kgx`) then GNOME Terminal, and Hyprland/Sway prefer Foot, with installed
+terminal fallbacks. Set `TERMINAL` to an executable path to override selection.
+All terminals inherit the selected directory without changing Fyle's process
+working directory.
 
 File opening uses `xdg-open`; install `xdg-utils` and configure MIME defaults
 in your desktop. A functioning user D-Bus session may be needed by desktop
@@ -233,7 +238,9 @@ The desktop entry follows the [freedesktop specification](https://specifications
 It accepts one local file URL per invocation, sets the window app ID to `fyle`,
 and resolves Home/Downloads through OS user directories rather than shell `~`.
 Remote URLs, D-Bus FileManager1 and desktop-wide clipboard are not implemented.
-Actual desktop sessions still need manual smoke testing.
+`fyle-cli doctor --json` reports the normalized desktop environment, display
+backend and init manager as well as the source environment hints. Actual desktop
+sessions still need manual smoke testing.
 
 ## Two binaries, one testable core
 

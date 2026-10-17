@@ -47,6 +47,10 @@ contents:
     dst: /usr/share/applications/fyle.desktop
     file_info:
       mode: 0644
+  - src: assets/fyle.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/fyle.svg
+    file_info:
+      mode: 0644
   - src: LICENSE
     dst: /usr/share/licenses/fyle/LICENSE
     file_info:

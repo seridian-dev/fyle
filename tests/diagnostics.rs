@@ -103,11 +103,18 @@ fn cli_exports_json_and_refuses_to_overwrite_bundles() {
         .args(["doctor", "--json"])
         .env("FYLE_DIAGNOSTICS_DIR", temp.path())
         .env("FYLE_TEST_SECRET", "do-not-collect-this")
+        .env("XDG_CURRENT_DESKTOP", "ubuntu:GNOME")
+        .env("XDG_SESSION_DESKTOP", "gnome")
+        .env("XDG_SESSION_TYPE", "wayland")
+        .env("WAYLAND_DISPLAY", "wayland-test")
         .output()
         .unwrap();
     assert!(output.status.success());
     let info: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert!(info["version"].is_string());
+    assert_eq!(info["desktop_environment"], "gnome");
+    assert_eq!(info["display_backend"], "wayland");
+    assert!(info["init_system"].is_string());
     assert!(!String::from_utf8_lossy(&output.stdout).contains("do-not-collect-this"));
     let bundle = temp.path().join("debug bundle.json");
     let first = std::process::Command::new(cli)

@@ -68,10 +68,18 @@ pub fn get_system_terminal() -> &'static str {
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        let desktop = std::env::var("XDG_CURRENT_DESKTOP")
-            .or_else(|_| std::env::var("XDG_SESSION_DESKTOP"))
-            .unwrap_or_default();
-        crate::desktop::select_terminal(&desktop, is_application_available).unwrap_or("xterm")
+        let present = |key| std::env::var_os(key).is_some_and(|value| !value.is_empty());
+        let session = crate::desktop::detect_session(
+            &std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default(),
+            &std::env::var("XDG_SESSION_DESKTOP").unwrap_or_default(),
+            &std::env::var("XDG_SESSION_TYPE").unwrap_or_default(),
+            present("HYPRLAND_INSTANCE_SIGNATURE"),
+            present("SWAYSOCK"),
+            present("WAYLAND_DISPLAY"),
+            present("DISPLAY"),
+        );
+        crate::desktop::select_terminal_for_session(session, is_application_available)
+            .unwrap_or("xterm")
     }
 }
 

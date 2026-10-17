@@ -1,0 +1,32 @@
+app-id: dev.seridian.Fyle
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: fyle
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=host
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.FileChooser
+  - --talk-name=org.freedesktop.portal.OpenURI
+modules:
+  - name: fyle
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 fyle /app/bin/fyle
+      - install -Dm755 fyle-cli /app/bin/fyle-cli
+      - install -Dm644 fyle.desktop /app/share/applications/dev.seridian.Fyle.desktop
+      - sed -i 's/^Icon=fyle$/Icon=dev.seridian.Fyle/' /app/share/applications/dev.seridian.Fyle.desktop
+      - install -Dm644 fyle.svg /app/share/icons/hicolor/scalable/apps/dev.seridian.Fyle.svg
+    sources:
+      - type: file
+        path: target/release/fyle
+      - type: file
+        path: target/release/fyle-cli
+      - type: file
+        path: fyle.desktop
+      - type: file
+        path: assets/fyle.svg

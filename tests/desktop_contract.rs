@@ -1,5 +1,8 @@
 use fyle::{
-    desktop::select_terminal,
+    desktop::{
+        detect_desktop, detect_display_backend, detect_init_system, detect_session,
+        select_terminal, select_terminal_for_session, DesktopEnvironment, DisplayBackend,
+    },
     startup::{resolve_location, resolve_target},
 };
 
@@ -8,7 +11,7 @@ fn desktop_policy_is_independent_of_init_system() {
     for (desktop, expected) in [
         ("KDE", "konsole"),
         ("plasma", "konsole"),
-        ("ubuntu:GNOME", "gnome-terminal"),
+        ("ubuntu:GNOME", "kgx"),
         ("Hyprland", "foot"),
         ("sway", "foot"),
         ("XFCE", "xfce4-terminal"),
@@ -20,6 +23,110 @@ fn desktop_policy_is_independent_of_init_system() {
         );
     }
     assert_eq!(select_terminal("unknown", |_| false), None);
+}
+
+#[test]
+fn desktop_and_session_detection_handles_common_wayland_and_x11_sessions() {
+    let cases = [
+        (
+            "KDE",
+            "",
+            "wayland",
+            DesktopEnvironment::Plasma,
+            DisplayBackend::Wayland,
+        ),
+        (
+            "ubuntu:GNOME",
+            "",
+            "wayland",
+            DesktopEnvironment::Gnome,
+            DisplayBackend::Wayland,
+        ),
+        (
+            "",
+            "plasma",
+            "x11",
+            DesktopEnvironment::Plasma,
+            DisplayBackend::X11,
+        ),
+        (
+            "",
+            "",
+            "",
+            DesktopEnvironment::Hyprland,
+            DisplayBackend::Wayland,
+        ),
+        ("", "", "", DesktopEnvironment::Sway, DisplayBackend::X11),
+        (
+            "XFCE",
+            "",
+            "",
+            DesktopEnvironment::Xfce,
+            DisplayBackend::Unknown,
+        ),
+        (
+            "COSMIC",
+            "",
+            "",
+            DesktopEnvironment::Cosmic,
+            DisplayBackend::Unknown,
+        ),
+    ];
+    for (desktop, session_desktop, session_type, expected_desktop, expected_display) in cases {
+        let session = detect_session(
+            desktop,
+            session_desktop,
+            session_type,
+            desktop.is_empty() && expected_desktop == DesktopEnvironment::Hyprland,
+            desktop.is_empty() && expected_desktop == DesktopEnvironment::Sway,
+            expected_display == DisplayBackend::Wayland,
+            expected_display == DisplayBackend::X11,
+        );
+        assert_eq!(session.environment, expected_desktop);
+        assert_eq!(session.display, expected_display);
+    }
+
+    assert_eq!(
+        detect_display_backend("wayland", false, true),
+        DisplayBackend::Wayland
+    );
+    assert_eq!(
+        detect_desktop("KDE:GNOME", "", false, false),
+        DesktopEnvironment::Plasma
+    );
+}
+
+#[test]
+fn terminal_preferences_follow_desktop_even_with_generic_xdg_sessions() {
+    let plasma = detect_session("", "plasma", "wayland", false, false, true, false);
+    assert_eq!(
+        select_terminal_for_session(plasma, |app| app == "konsole"),
+        Some("konsole")
+    );
+
+    let gnome = detect_session("ubuntu:GNOME", "", "wayland", false, false, true, false);
+    assert_eq!(
+        select_terminal_for_session(gnome, |app| app == "kgx"),
+        Some("kgx")
+    );
+
+    let hyprland = detect_session("", "", "wayland", true, false, true, false);
+    assert_eq!(
+        select_terminal_for_session(hyprland, |app| app == "foot"),
+        Some("foot")
+    );
+    assert_eq!(
+        select_terminal_for_session(hyprland, |app| app == "kitty"),
+        Some("kitty")
+    );
+}
+
+#[test]
+fn init_detection_distinguishes_openrc_systemd_and_other_without_affecting_desktop() {
+    assert_eq!(detect_init_system(true, "systemd"), "openrc");
+    assert_eq!(detect_init_system(false, "systemd"), "systemd");
+    assert_eq!(detect_init_system(false, "runit"), "other");
+    assert_eq!(select_terminal("Hyprland", |_| true), Some("foot"));
 }
 
 #[test]

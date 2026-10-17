@@ -1,0 +1,39 @@
+EAPI=8
+
+DESCRIPTION="Fyle desktop file manager and native source editor"
+HOMEPAGE="https://github.com/seridian-dev/fyle"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="~amd64 ~arm64"
+RESTRICT="strip"
+
+case ${ARCH} in
+	amd64) FYLE_TRIPLE=x86_64 ;;
+	arm64) FYLE_TRIPLE=aarch64 ;;
+	*) die "Unsupported architecture: ${ARCH}" ;;
+esac
+
+SRC_URI="https://github.com/seridian-dev/fyle/releases/download/v${PV}/fyle-${PV}-linux-${FYLE_TRIPLE}.tar.gz"
+S="${WORKDIR}/fyle-${PV}-linux-${FYLE_TRIPLE}"
+
+RDEPEND="
+	media-libs/mesa
+	x11-libs/libX11
+	x11-libs/libXcursor
+	x11-libs/libXi
+	x11-libs/libXrandr
+	x11-libs/libxkbcommon
+	dev-libs/wayland
+	x11-misc/xdg-utils
+"
+
+src_install() {
+	dobin bin/fyle bin/fyle-cli
+	insinto /usr/share/applications
+	doins share/applications/fyle.desktop
+	insinto /usr/share/icons/hicolor/scalable/apps
+	doins share/icons/hicolor/scalable/apps/fyle.svg
+	dodoc README.md
+	insinto /usr/share/licenses/fyle
+	doins LICENSE
+}

@@ -48,10 +48,33 @@ jobs:
           go-version: "1.26.4"
       - run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev pkg-config
+          sudo apt-get install -y curl dbus-daemon flatpak flatpak-builder libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev pkg-config
       - run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
       - run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - run: actionlint .github/workflows/ci.yml .github/workflows/release.yml
       - name: Build and package all Linux formats
         run: scripts/package_linux.sh "$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)" x86_64
+      - name: Build AppImage
+        run: scripts/package_appimage.sh "$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)" x86_64
+      - name: Build Flatpak bundle
+        run: scripts/package_flatpak.sh "$(grep -m1 '^version = ' Cargo.toml | cut -d '"' -f2)" x86_64
+
+  nix-packages:
+    name: Build Nix package (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86_64
+            runner: ubuntu-22.04
+          - name: ARM64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Nix package
+        run: nix build --no-write-lock-file --print-build-logs .#default
