@@ -43,7 +43,8 @@ Freedesktop runtime from Flathub and uses filesystem access so Fyle can manage
 your files. Launch it with `flatpak run dev.seridian.Fyle`. Make an AppImage executable and launch it with
 `chmod +x fyle-*.AppImage && ./fyle-*.AppImage`.
 
-The Gentoo release asset is a small overlay tree. Extract it under
+The Gentoo release asset is a small overlay tree. Extract it into
+`/var/db/repos` so the archive's `fyle/` directory becomes
 `/var/db/repos/fyle`, then add `/etc/portage/repos.conf/fyle.conf` with:
 
 ```ini
