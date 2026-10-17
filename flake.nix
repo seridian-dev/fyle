@@ -25,20 +25,15 @@
           version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
-          nativeBuildInputs = [ pkgs.git pkgs.makeWrapper pkgs.pkg-config ];
+          nativeBuildInputs = [ pkgs.git pkgs.makeWrapper pkgs.patchelf pkgs.pkg-config ];
           buildInputs = graphicsLibraries;
 
           postInstall = ''
             install -Dm644 ${./fyle.desktop} $out/share/applications/fyle.desktop
             install -Dm644 ${./assets/fyle.svg} $out/share/icons/hicolor/scalable/apps/fyle.svg
             for executable in $out/bin/*; do
-              wrapProgram "$executable" --prefix PATH : ${lib.makeBinPath [ pkgs.git pkgs.xdg-utils ]}
-            done
-          '';
-
-          postFixup = ''
-            for executable in $out/bin/*; do
               patchelf --add-rpath ${lib.makeLibraryPath graphicsLibraries} "$executable"
+              wrapProgram "$executable" --prefix PATH : ${lib.makeBinPath [ pkgs.git pkgs.xdg-utils ]}
             done
           '';
 
