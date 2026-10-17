@@ -115,6 +115,17 @@ fn cli_exports_json_and_refuses_to_overwrite_bundles() {
     assert_eq!(info["desktop_environment"], "gnome");
     assert_eq!(info["display_backend"], "wayland");
     assert!(info["init_system"].is_string());
+    assert_eq!(info["session_desktop"], "gnome");
+    let summary = std::process::Command::new(cli)
+        .args(["doctor"])
+        .env("XDG_SESSION_DESKTOP", "plasma")
+        .env("XDG_SESSION_TYPE", "x11")
+        .output()
+        .unwrap();
+    assert!(summary.status.success());
+    let summary = String::from_utf8_lossy(&summary.stdout);
+    assert!(summary.contains("session_desktop: \"plasma\""));
+    assert!(summary.contains("display_backend: \"x11\""));
     assert!(!String::from_utf8_lossy(&output.stdout).contains("do-not-collect-this"));
     let bundle = temp.path().join("debug bundle.json");
     let first = std::process::Command::new(cli)

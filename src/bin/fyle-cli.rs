@@ -28,7 +28,7 @@ fn main() -> Result<()> {
             if args[1..].contains(&"--json".into()) { print_json(&info)?; }
             else {
                 println!("Fyle {} ({})", info["version"].as_str().unwrap_or(""), info["revision"].as_str().unwrap_or(""));
-                for key in ["os", "arch", "build", "desktop", "desktop_environment", "session_type", "display_backend", "init_system", "init_process", "terminal", "xdg_open_available", "dbus_session_present", "diagnostics_directory"] {
+                for key in ["os", "arch", "build", "desktop", "session_desktop", "desktop_environment", "session_type", "display_backend", "display_present", "wayland_present", "init_system", "init_process", "terminal", "xdg_open_available", "dbus_session_present", "diagnostics_directory"] {
                     println!("{key}: {}", info[key]);
                 }
                 println!("Use fyle-cli debug bundle to collect shareable diagnostics.");
