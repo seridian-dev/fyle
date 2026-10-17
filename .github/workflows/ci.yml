@@ -24,6 +24,7 @@ jobs:
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - run: bash -n install.sh && desktop-file-validate fyle.desktop
       - run: python3 -m unittest discover -s tests -p "test_*.py"
+      - run: python3 -m compileall -q scripts tests
       - run: cargo build --locked --bins
       - name: Exercise GUI and capture agent-visible state
         env:
