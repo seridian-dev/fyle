@@ -8,7 +8,7 @@ of tiny crates until separate dependency or release requirements justify one.
 | --- | --- | --- |
 | `src/types.rs` | Shared values and errors | Infrequent; keep backward compatibility |
 | `src/core/file_ops/operations.rs` | Filesystem mutations | Safety and filesystem behavior |
-| `src/core/archive.rs` | ZIP creation and safe ZIP/TAR extraction | Archive format and path-safety policy |
+| `src/core/archive.rs` | ZIP/7z creation and safe archive extraction | Archive format and path-safety policy |
 | `src/core/file_ops/listing.rs` | Directory queries, sorting and filtering | Query policy |
 | `src/core/file_ops/presentation.rs` | File labels, icons and sizes | Visual conventions |
 | `src/core/loader.rs` | Background scans and stale-result rejection | Filesystem query execution |
@@ -45,10 +45,10 @@ single `OperationJob`, disables conflicting controls until completion, preserves
 errors and refreshes the directory afterward. Only successful Move jobs clear
 the cut clipboard. Trash behavior is selected by the feature at this boundary;
 there is no destructive fallback. No filesystem mutation runs in a view renderer.
-Archive jobs follow this same path. ZIP output is exclusive; extraction stages
-regular files/directories, rejects links and escaping paths, and publishes only
-to a new destination folder. The supported reader formats are ZIP, TAR and
-gzip-compressed TAR.
+Archive jobs follow this same path. ZIP and 7z output are exclusive; extraction
+stages regular files/directories, rejects links and escaping paths, and publishes
+only to a new destination folder. Native readers handle ZIP, 7z, TAR and
+gzip-compressed TAR. RAR extraction uses an installed `bsdtar` or 7-Zip tool.
 
 ## Native desktop validation
 

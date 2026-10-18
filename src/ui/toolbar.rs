@@ -352,6 +352,12 @@ pub fn render_bulk_operations(ui: &mut Ui, selected_count: usize) -> Option<Bulk
                         Icon::Archive,
                         BulkAction::CreateZip,
                     ),
+                    (
+                        "archive_selection_7z",
+                        "7z",
+                        Icon::Archive,
+                        BulkAction::Create7z,
+                    ),
                     ("copy_selection", "Copy", Icon::Copy, BulkAction::Copy),
                     ("cut_selection", "Cut", Icon::Cut, BulkAction::Cut),
                     (
@@ -386,6 +392,7 @@ pub fn render_bulk_operations(ui: &mut Ui, selected_count: usize) -> Option<Bulk
 #[derive(Debug, Clone)]
 pub enum BulkAction {
     CreateZip,
+    Create7z,
     Copy,
     Cut,
     Delete,

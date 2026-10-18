@@ -1,4 +1,4 @@
-use fyle::core::{create_zip, extract_archive};
+use fyle::core::{create_7z, create_zip, extract_archive};
 use std::fs;
 use std::io::Write;
 
@@ -23,6 +23,47 @@ fn zip_creation_and_extraction_round_trip_files_and_directories() {
         fs::read(extracted.join("mission files/nested/data.bin")).unwrap(),
         [0, 1, 2, 255]
     );
+}
+
+#[test]
+fn seven_zip_creation_and_extraction_round_trip_files_and_directories() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("project");
+    fs::create_dir_all(source.join("src")).unwrap();
+    fs::write(source.join("README.md"), "seven zip support").unwrap();
+    fs::write(source.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let archive = temp.path().join("project.7z");
+
+    create_7z(std::slice::from_ref(&source), &archive).unwrap();
+    let extracted = extract_archive(&archive, temp.path()).unwrap();
+
+    assert_eq!(
+        fs::read_to_string(extracted.join("project/README.md")).unwrap(),
+        "seven zip support"
+    );
+    assert_eq!(
+        fs::read_to_string(extracted.join("project/src/main.rs")).unwrap(),
+        "fn main() {}\n"
+    );
+}
+
+#[test]
+fn seven_zip_extraction_rejects_traversal() {
+    let temp = tempfile::tempdir().unwrap();
+    let archive = temp.path().join("escape.7z");
+    let file = fs::File::create(&archive).unwrap();
+    let mut writer = sevenz_rust2::ArchiveWriter::new(file).unwrap();
+    writer
+        .push_archive_entry(
+            sevenz_rust2::ArchiveEntry::new_file("../outside.txt"),
+            Some(std::io::Cursor::new(b"escaped".to_vec())),
+        )
+        .unwrap();
+    writer.finish().unwrap();
+
+    assert!(extract_archive(&archive, temp.path()).is_err());
+    assert!(!temp.path().join("outside.txt").exists());
+    assert!(!temp.path().join("escape-extracted").exists());
 }
 
 #[test]

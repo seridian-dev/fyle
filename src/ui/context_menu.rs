@@ -21,6 +21,7 @@ pub enum ContextMenuAction {
     AddBookmark,
     OpenTerminal,
     CreateZip(PathBuf),
+    Create7z(PathBuf),
     ExtractArchive(PathBuf),
     Close,
 }
@@ -142,6 +143,15 @@ pub fn show_context_menu(ctx: &Context, pos: Pos2, target: &FileEntry) -> Contex
                         colors::MAGENTA,
                     ) {
                         action = ContextMenuAction::CreateZip(target.path.clone());
+                    }
+                    if menu_item(
+                        ui,
+                        "context_create_7z",
+                        "Compress to 7z",
+                        Icon::Archive,
+                        colors::MAGENTA,
+                    ) {
+                        action = ContextMenuAction::Create7z(target.path.clone());
                     }
                     ui.separator();
                     if menu_item(ui, "context_copy", "Copy", Icon::Copy, colors::CYBER_GREEN) {

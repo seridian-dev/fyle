@@ -5,11 +5,18 @@ use flate2::read::GzDecoder;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use walkdir::WalkDir;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
 static STAGING_ID: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy)]
+enum ArchiveOutput {
+    Zip,
+    SevenZip,
+}
 
 /// Create a ZIP archive containing each source and its contents.
 ///
@@ -17,6 +24,15 @@ static STAGING_ID: AtomicU64 = AtomicU64::new(0);
 /// Symlinks and special files are rejected so the archive has predictable
 /// contents across Linux desktops.
 pub fn create_zip(sources: &[PathBuf], archive_path: &Path) -> Result<()> {
+    create_archive(sources, archive_path, ArchiveOutput::Zip)
+}
+
+/// Create a native 7z archive. Existing files are never replaced.
+pub fn create_7z(sources: &[PathBuf], archive_path: &Path) -> Result<()> {
+    create_archive(sources, archive_path, ArchiveOutput::SevenZip)
+}
+
+fn create_archive(sources: &[PathBuf], archive_path: &Path, output: ArchiveOutput) -> Result<()> {
     anyhow::ensure!(!sources.is_empty(), "Select at least one item to archive");
     let archive_parent = archive_path
         .parent()
@@ -39,14 +55,17 @@ pub fn create_zip(sources: &[PathBuf], archive_path: &Path) -> Result<()> {
         .create_new(true)
         .open(&destination)
         .with_context(|| format!("Cannot create archive {}", destination.display()))?;
-    let result = write_zip(file, &sources);
+    let result = match output {
+        ArchiveOutput::Zip => write_zip(file, &sources),
+        ArchiveOutput::SevenZip => write_7z(file, &sources),
+    };
     if result.is_err() {
         let _ = fs::remove_file(&destination);
     }
     result.with_context(|| format!("Failed to create archive {}", destination.display()))
 }
 
-/// Extract a ZIP or tar/tar.gz archive into a new sibling folder.
+/// Extract a ZIP, 7z or tar/tar.gz archive into a new sibling folder.
 ///
 /// Extraction is staged in a private sibling directory and only published
 /// after every entry succeeds. Existing destinations are preserved. Archive
@@ -69,10 +88,12 @@ pub fn extract_archive(archive_path: &Path, destination: &Path) -> Result<PathBu
 
     let result = (|| match archive_kind(archive_path) {
         ArchiveKind::Zip => extract_zip(archive_path, &staging),
+        ArchiveKind::SevenZip => extract_7z(archive_path, &staging),
+        ArchiveKind::Rar => extract_rar(archive_path, &staging),
         ArchiveKind::Tar => extract_tar(File::open(archive_path)?, &staging),
         ArchiveKind::TarGzip => extract_tar(GzDecoder::new(File::open(archive_path)?), &staging),
         ArchiveKind::Unsupported => bail!(
-            "Unsupported archive format: {} (supported: .zip, .tar, .tar.gz, .tgz)",
+            "Unsupported archive format: {} (supported: .zip, .7z, .rar, .tar, .tar.gz, .tgz)",
             archive_path.display()
         ),
     })();
@@ -134,6 +155,42 @@ fn write_zip(file: File, sources: &[PathBuf]) -> Result<()> {
         }
     }
     writer.finish()?;
+    Ok(())
+}
+
+fn write_7z(file: File, sources: &[PathBuf]) -> Result<()> {
+    let mut writer =
+        sevenz_rust2::ArchiveWriter::new(file).context("Cannot initialize 7z writer")?;
+    for source in sources {
+        let parent = source
+            .parent()
+            .context("Selected item has no parent folder")?;
+        for entry in WalkDir::new(source).sort_by_file_name() {
+            let entry = entry?;
+            let path = entry.path();
+            if entry.file_type().is_symlink()
+                || (!entry.file_type().is_file() && !entry.file_type().is_dir())
+            {
+                bail!("Cannot archive links or special files: {}", path.display());
+            }
+            let relative = path.strip_prefix(parent)?;
+            let name = zip_name(relative, entry.file_type().is_dir())?;
+            let archive_entry = if entry.file_type().is_dir() {
+                sevenz_rust2::ArchiveEntry::new_directory(&name)
+            } else {
+                sevenz_rust2::ArchiveEntry::from_path(path, name)
+            };
+            let reader = if entry.file_type().is_file() {
+                Some(File::open(path)?)
+            } else {
+                None
+            };
+            writer
+                .push_archive_entry(archive_entry, reader)
+                .with_context(|| format!("Cannot add {} to 7z archive", path.display()))?;
+        }
+    }
+    writer.finish().context("Cannot finish 7z archive")?;
     Ok(())
 }
 
@@ -261,7 +318,198 @@ fn extract_tar(reader: impl Read, staging: &Path) -> Result<()> {
     Ok(())
 }
 
-fn create_archive_file(output: &Path, reader: &mut impl Read) -> Result<()> {
+fn extract_7z(archive_path: &Path, staging: &Path) -> Result<()> {
+    sevenz_rust2::decompress_file_with_extract_fn(archive_path, staging, |entry, reader, _| {
+        if entry.is_anti_item {
+            return Err(sevenz_error("7z anti-items are not supported"));
+        }
+        let relative = normalize_seven_zip_path(&entry.name)
+            .map_err(|error| sevenz_error(error.to_string()))?;
+        let output = staging.join(relative);
+        if entry.is_directory {
+            fs::create_dir_all(output).map_err(sevenz_rust2::Error::from)?;
+        } else {
+            create_archive_file(&output, reader)
+                .map_err(|error| sevenz_error(error.to_string()))?;
+        }
+        Ok(true)
+    })
+    .context("Invalid or unsupported 7z archive")
+}
+
+fn sevenz_error(message: impl Into<String>) -> sevenz_rust2::Error {
+    sevenz_rust2::Error::from(io::Error::new(io::ErrorKind::InvalidData, message.into()))
+}
+
+fn normalize_seven_zip_path(name: &str) -> Result<PathBuf> {
+    anyhow::ensure!(
+        !name.is_empty() && !name.contains(['\\', '\0', ':']),
+        "7z archive contains an unsafe path"
+    );
+    let path = Path::new(name);
+    validate_relative_path(path)?;
+    Ok(path.to_owned())
+}
+
+fn extract_rar(archive_path: &Path, staging: &Path) -> Result<()> {
+    if command_exists("bsdtar") {
+        extract_rar_with_bsdtar(archive_path, staging)
+    } else if let Some(seven_zip) = ["7zz", "7z", "7za"]
+        .into_iter()
+        .find(|program| command_exists(program))
+    {
+        extract_rar_with_7zip(seven_zip, archive_path, staging)
+    } else {
+        bail!("RAR extraction needs bsdtar (libarchive) or 7-Zip (7z/7zz)")
+    }
+}
+
+fn extract_rar_with_bsdtar(archive_path: &Path, staging: &Path) -> Result<()> {
+    let listing = Command::new("bsdtar")
+        .args(["-tf"])
+        .arg(archive_path)
+        .stdin(Stdio::null())
+        .output()
+        .context("Could not start bsdtar to inspect the RAR archive")?;
+    anyhow::ensure!(
+        listing.status.success(),
+        "bsdtar could not read the RAR archive: {}",
+        String::from_utf8_lossy(&listing.stderr).trim()
+    );
+    for path in String::from_utf8_lossy(&listing.stdout).lines() {
+        let _ = normalize_seven_zip_path(path)?;
+    }
+
+    let details = Command::new("bsdtar")
+        .args(["-tvf"])
+        .arg(archive_path)
+        .stdin(Stdio::null())
+        .output()
+        .context("Could not inspect RAR entry types")?;
+    anyhow::ensure!(
+        details.status.success(),
+        "bsdtar could not inspect RAR entries: {}",
+        String::from_utf8_lossy(&details.stderr).trim()
+    );
+    for line in String::from_utf8_lossy(&details.stdout).lines() {
+        let file_type = line.chars().next().unwrap_or(' ');
+        anyhow::ensure!(
+            file_type == '-' || file_type == 'd',
+            "RAR archives containing links or special files are not supported"
+        );
+    }
+
+    let output = Command::new("bsdtar")
+        .args(["-xf"])
+        .arg(archive_path)
+        .arg("-C")
+        .arg(staging)
+        .stdin(Stdio::null())
+        .output()
+        .context("Could not start bsdtar to extract the RAR archive")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "bsdtar could not extract the RAR archive: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    validate_extracted_tree(staging)
+}
+
+fn extract_rar_with_7zip(seven_zip: &str, archive_path: &Path, staging: &Path) -> Result<()> {
+    let listing = Command::new(seven_zip)
+        .args(["l", "-slt"])
+        .arg(archive_path)
+        .stdin(Stdio::null())
+        .output()
+        .context("Could not start 7-Zip to inspect the RAR archive")?;
+    anyhow::ensure!(
+        listing.status.success(),
+        "7-Zip could not read the RAR archive: {}",
+        String::from_utf8_lossy(&listing.stderr).trim()
+    );
+    validate_7z_listing(&String::from_utf8_lossy(&listing.stdout))?;
+
+    let output = Command::new(seven_zip)
+        .arg("x")
+        .arg("-y")
+        .arg(format!("-o{}", staging.display()))
+        .arg(archive_path)
+        .stdin(Stdio::null())
+        .output()
+        .context("Could not start 7-Zip to extract the RAR archive")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "7-Zip could not extract the RAR archive: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    validate_extracted_tree(staging)
+}
+
+fn command_exists(program: &str) -> bool {
+    Command::new(program)
+        .arg("--help")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok()
+}
+
+fn validate_7z_listing(listing: &str) -> Result<()> {
+    let mut in_entries = false;
+    let mut entry = Vec::new();
+    for line in listing.lines().chain(std::iter::once("")) {
+        if line.starts_with("----------") {
+            in_entries = true;
+            entry.clear();
+            continue;
+        }
+        if !in_entries {
+            continue;
+        }
+        if line.is_empty() {
+            validate_7z_listing_entry(&entry)?;
+            entry.clear();
+        } else {
+            entry.push(line);
+        }
+    }
+    Ok(())
+}
+
+fn validate_7z_listing_entry(lines: &[&str]) -> Result<()> {
+    for line in lines {
+        if let Some(path) = line.strip_prefix("Path = ") {
+            let _ = normalize_seven_zip_path(path)?;
+        }
+        if let Some(attributes) = line.strip_prefix("Attributes = ") {
+            anyhow::ensure!(
+                !attributes
+                    .split_whitespace()
+                    .any(|attribute| attribute.starts_with('l') || attribute.contains("LINK")),
+                "RAR archives containing symbolic links are not supported"
+            );
+        }
+        anyhow::ensure!(
+            !line.starts_with("Symbolic Link = ") && !line.starts_with("Hard Link = "),
+            "RAR archives containing links are not supported"
+        );
+    }
+    Ok(())
+}
+
+fn validate_extracted_tree(root: &Path) -> Result<()> {
+    for entry in WalkDir::new(root).follow_links(false) {
+        let entry = entry?;
+        anyhow::ensure!(
+            entry.file_type().is_file() || entry.file_type().is_dir(),
+            "RAR archives containing links or special files are not supported"
+        );
+    }
+    Ok(())
+}
+
+fn create_archive_file(output: &Path, reader: &mut (impl Read + ?Sized)) -> Result<()> {
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -327,10 +575,10 @@ fn ensure_absent(path: &Path) -> Result<()> {
 fn extracted_folder_name(path: &Path) -> Result<String> {
     let name = path.file_name().context("Archive has no file name")?;
     let lower = name.to_string_lossy().to_ascii_lowercase();
-    let suffix = [".tar.gz", ".tgz", ".tar", ".zip"]
+    let suffix = [".tar.gz", ".tgz", ".tar", ".7z", ".rar", ".zip"]
         .into_iter()
         .find(|suffix| lower.ends_with(suffix))
-        .context("Unsupported archive format (supported: .zip, .tar, .tar.gz, .tgz)")?;
+        .context("Unsupported archive format (supported: .zip, .7z, .rar, .tar, .tar.gz, .tgz)")?;
     let name = name.to_string_lossy();
     let stem = &name[..name.len() - suffix.len()];
     anyhow::ensure!(
@@ -343,6 +591,8 @@ fn extracted_folder_name(path: &Path) -> Result<String> {
 #[derive(Clone, Copy)]
 enum ArchiveKind {
     Zip,
+    SevenZip,
+    Rar,
     Tar,
     TarGzip,
     Unsupported,
@@ -356,6 +606,10 @@ fn archive_kind(path: &Path) -> ArchiveKind {
         .to_ascii_lowercase();
     if name.ends_with(".zip") {
         ArchiveKind::Zip
+    } else if name.ends_with(".7z") {
+        ArchiveKind::SevenZip
+    } else if name.ends_with(".rar") {
+        ArchiveKind::Rar
     } else if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
         ArchiveKind::TarGzip
     } else if name.ends_with(".tar") {
@@ -371,10 +625,25 @@ mod tests {
 
     #[test]
     fn supported_archive_detection_is_case_insensitive() {
-        for path in ["backup.ZIP", "backup.tar", "backup.TAR.GZ", "backup.tgz"] {
+        for path in [
+            "backup.ZIP",
+            "backup.7Z",
+            "backup.RAR",
+            "backup.tar",
+            "backup.TAR.GZ",
+            "backup.tgz",
+        ] {
             assert!(is_supported_archive(Path::new(path)), "{path}");
         }
-        assert!(!is_supported_archive(Path::new("backup.7z")));
-        assert!(!is_supported_archive(Path::new("backup.rar")));
+        assert!(!is_supported_archive(Path::new("backup.iso")));
+    }
+
+    #[test]
+    fn rar_listing_rejects_escaping_paths_and_links() {
+        let traversal = "----------\nPath = ../outside\nSize = 1\n\n";
+        assert!(validate_7z_listing(traversal).is_err());
+
+        let link = "----------\nPath = link\nAttributes = A_ lrwxrwxrwx\n\n";
+        assert!(validate_7z_listing(link).is_err());
     }
 }
