@@ -29,6 +29,8 @@ pub enum Icon {
     Rename,
     Delete,
     Properties,
+    Archive,
+    Extract,
 }
 pub fn paint(p: &Painter, rect: Rect, icon: Icon, color: Color32) {
     let rect = rect.shrink(rect.width() * 0.08);
@@ -213,6 +215,18 @@ pub fn paint(p: &Painter, rect: Rect, icon: Icon, color: Color32) {
             p.circle_stroke(point(12., 12.), rect.width() * 0.42, stroke);
             p.circle_filled(point(12., 7.), rect.width() * 0.055, color);
             line(&[(12., 11.), (12., 17.)]);
+        }
+        Icon::Archive => {
+            box_at(3., 4., 18., 17.);
+            line(&[(3., 9.), (21., 9.)]);
+            line(&[(9., 4.), (9., 9.)]);
+            line(&[(15., 4.), (15., 9.)]);
+            line(&[(10., 14.), (14., 14.)]);
+        }
+        Icon::Extract => {
+            box_at(3., 4., 18., 17.);
+            line(&[(12., 8.), (12., 18.)]);
+            line(&[(8., 14.), (12., 18.), (16., 14.)]);
         }
     }
 }

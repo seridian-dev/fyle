@@ -185,6 +185,14 @@ impl FileManager {
     /// Handle bulk action from toolbar.
     pub(super) fn handle_bulk_action(&mut self, action: BulkAction) {
         match action {
+            BulkAction::CreateZip => {
+                let selected = self
+                    .get_selected_entries()
+                    .into_iter()
+                    .map(|entry| entry.path)
+                    .collect();
+                self.start_zip(selected);
+            }
             BulkAction::Copy => self.copy_to_clipboard(),
             BulkAction::Cut => self.cut_to_clipboard(),
             BulkAction::Delete => {
@@ -195,6 +203,23 @@ impl FileManager {
             BulkAction::SelectAll => self.select_all(),
             BulkAction::SelectNone => self.select_none(),
         }
+    }
+
+    fn start_zip(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+        let name = if paths.len() == 1 {
+            format!(
+                "{}.zip",
+                paths[0].file_name().unwrap_or_default().to_string_lossy()
+            )
+        } else {
+            "selection.zip".to_owned()
+        };
+        self.operation = Some(fyle::core::job::OperationJob::start(
+            fyle::core::job::FileOperation::CreateZip(paths, self.current_path.join(name)),
+        ));
     }
 
     /// Handle sidebar actions.
@@ -303,6 +328,16 @@ impl FileManager {
                 };
 
                 self.terminal.toggle(&path);
+                self.context_menu.hide();
+            }
+            ContextMenuAction::CreateZip(path) => {
+                self.start_zip(vec![path]);
+                self.context_menu.hide();
+            }
+            ContextMenuAction::ExtractArchive(path) => {
+                self.operation = Some(fyle::core::job::OperationJob::start(
+                    fyle::core::job::FileOperation::ExtractArchive(path, self.current_path.clone()),
+                ));
                 self.context_menu.hide();
             }
             ContextMenuAction::Close => {

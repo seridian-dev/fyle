@@ -6,6 +6,8 @@ pub enum FileOperation {
     Copy(Vec<PathBuf>, PathBuf),
     Move(Vec<PathBuf>, PathBuf),
     Remove(Vec<PathBuf>),
+    CreateZip(Vec<PathBuf>, PathBuf),
+    ExtractArchive(PathBuf, PathBuf),
     CreateFolder(PathBuf, String),
     CreateFile(PathBuf, String),
     Rename(PathBuf, String),
@@ -16,6 +18,8 @@ impl FileOperation {
             Self::Copy(..) => "copy",
             Self::Move(..) => "move",
             Self::Remove(..) => "remove",
+            Self::CreateZip(..) => "create_zip",
+            Self::ExtractArchive(..) => "extract_archive",
             Self::CreateFolder(..) => "create_folder",
             Self::CreateFile(..) => "create_file",
             Self::Rename(..) => "rename",
@@ -37,6 +41,10 @@ impl FileOperation {
                 {
                     delete_files(&paths)
                 }
+            }
+            Self::CreateZip(paths, archive) => create_zip(&paths, &archive),
+            Self::ExtractArchive(archive, destination) => {
+                extract_archive(&archive, &destination).map(|_| ())
             }
             Self::CreateFolder(parent, name) => create_directory(&parent, &name).map(|_| ()),
             Self::CreateFile(parent, name) => create_file(&parent, &name).map(|_| ()),
