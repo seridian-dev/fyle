@@ -193,6 +193,14 @@ impl FileManager {
                     .collect();
                 self.start_zip(selected);
             }
+            BulkAction::Create7z => {
+                let selected = self
+                    .get_selected_entries()
+                    .into_iter()
+                    .map(|entry| entry.path)
+                    .collect();
+                self.start_7z(selected);
+            }
             BulkAction::Copy => self.copy_to_clipboard(),
             BulkAction::Cut => self.cut_to_clipboard(),
             BulkAction::Delete => {
@@ -219,6 +227,23 @@ impl FileManager {
         };
         self.operation = Some(fyle::core::job::OperationJob::start(
             fyle::core::job::FileOperation::CreateZip(paths, self.current_path.join(name)),
+        ));
+    }
+
+    fn start_7z(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+        let name = if paths.len() == 1 {
+            format!(
+                "{}.7z",
+                paths[0].file_name().unwrap_or_default().to_string_lossy()
+            )
+        } else {
+            "selection.7z".to_owned()
+        };
+        self.operation = Some(fyle::core::job::OperationJob::start(
+            fyle::core::job::FileOperation::Create7z(paths, self.current_path.join(name)),
         ));
     }
 
@@ -332,6 +357,10 @@ impl FileManager {
             }
             ContextMenuAction::CreateZip(path) => {
                 self.start_zip(vec![path]);
+                self.context_menu.hide();
+            }
+            ContextMenuAction::Create7z(path) => {
+                self.start_7z(vec![path]);
                 self.context_menu.hide();
             }
             ContextMenuAction::ExtractArchive(path) => {

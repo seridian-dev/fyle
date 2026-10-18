@@ -41,11 +41,12 @@ categories. Ctrl-click adds/removes selections in either view.
   right-click a pin to remove it. Unconfigured OS user directories are disabled
   in Quick Access. `More` includes New file, Refresh and Open terminal;
   `Ctrl+Alt+T` also opens the desktop terminal.
-- **Archives:** right-click a file or folder and choose **Compress to ZIP**;
-  select several entries to create one ZIP from the selection. ZIP, TAR and
+- **Archives:** right-click a file or folder and choose **Compress to ZIP** or
+  **Compress to 7z**; bulk selections can also be compressed. ZIP, 7z, RAR, TAR and
   gzip-compressed TAR (`.tar.gz`/`.tgz`) archives extract into a new
   `*-extracted` folder. Extraction rejects path escapes, links and special
-  files, and leaves existing files untouched.
+  files, and leaves existing files untouched. RAR extraction uses an installed
+  `7zz`, `7z` or `7za` command; Fyle creates ZIP and 7z archives, not RAR files.
 
 ### Original palette and OpenGL
 
@@ -275,8 +276,8 @@ Names must be a single component; recursive self-copy, symlinks and special
 files are rejected by copy/move instead of followed implicitly. Cross-device
 moves currently return an error and preserve the source.
 
-Archive creation and extraction run in background jobs. ZIP output never
-replaces an existing file. Extraction stages content before publishing a new
+Archive creation and extraction run in background jobs. ZIP and 7z output never
+replace an existing file. Extraction stages content before publishing a new
 folder; unsafe entry paths, links, unsupported formats and destination
 collisions are reported in the UI.
 

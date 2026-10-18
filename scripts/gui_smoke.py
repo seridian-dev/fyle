@@ -68,7 +68,8 @@ def main():
                 state = request('click', '--button', 'right', '--x', x + width / 2,
                                 '--y', y + height / 2, '--snapshot', state['snapshot_id'])
                 expected = {'context_open', 'context_copy', 'context_cut',
-                            'context_delete', 'context_terminal', 'context_create_zip'}
+                            'context_delete', 'context_terminal', 'context_create_zip',
+                            'context_create_7z'}
                 for _ in range(10):
                     visible = {control['id'] for control in state['controls']}
                     if state['context_menu']['visible'] and expected <= visible:
@@ -128,6 +129,7 @@ def main():
             assert not state['context_menu']['visible']
             state = right_click('entry:alpha.txt')
             assert 'context_create_zip' in {control['id'] for control in state['controls']}
+            assert 'context_create_7z' in {control['id'] for control in state['controls']}
             state = click('context_create_zip')
             state = request('wait')
             assert state['error'] is None
