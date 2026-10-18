@@ -153,6 +153,7 @@ impl eframe::App for FileManager {
                 &mut self.search_query,
                 can_go_back,
                 can_go_forward,
+                &mut self.toolbar_more_open,
             ) {
                 self.handle_toolbar_action(action);
             }

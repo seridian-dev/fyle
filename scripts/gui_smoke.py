@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import time
@@ -55,6 +56,7 @@ def main():
             except RuntimeError as error:
                 if 'Stale snapshot' not in str(error) or attempt == 4:
                     raise
+                time.sleep(0.05)
 
     def right_click(control_id):
         time.sleep(0.32)
@@ -66,7 +68,7 @@ def main():
                 state = request('click', '--button', 'right', '--x', x + width / 2,
                                 '--y', y + height / 2, '--snapshot', state['snapshot_id'])
                 expected = {'context_open', 'context_copy', 'context_cut',
-                            'context_delete', 'context_terminal'}
+                            'context_delete', 'context_terminal', 'context_create_zip'}
                 for _ in range(10):
                     visible = {control['id'] for control in state['controls']}
                     if state['context_menu']['visible'] and expected <= visible:
@@ -107,6 +109,12 @@ def main():
             state = request('action', 'toggle_hidden')
             assert not state['show_hidden']
             capture('01-list')
+            state = click('toolbar_more')
+            more_controls = {control['id'] for control in state['controls']}
+            assert {'toolbar_new_file', 'toolbar_open_terminal', 'toolbar_refresh',
+                    'toolbar_appearance'} <= more_controls
+            capture('01-more-menu')
+            click('toolbar_more')
             state = click('entry:alpha.txt')
             assert state['selected_count'] == 1
             assert next(entry for entry in state['entries'] if entry['name'] == 'alpha.txt')['selected']
@@ -118,6 +126,24 @@ def main():
             capture('02-context-menu')
             state = click('context_copy')
             assert not state['context_menu']['visible']
+            state = right_click('entry:alpha.txt')
+            assert 'context_create_zip' in {control['id'] for control in state['controls']}
+            state = click('context_create_zip')
+            state = request('wait')
+            assert state['error'] is None
+            assert (fixture / 'alpha.txt.zip').is_file()
+            state = right_click('entry:alpha.txt.zip')
+            assert 'context_extract_archive' in {control['id'] for control in state['controls']}
+            capture('02-extract-context-menu')
+            state = click('context_extract_archive')
+            state = request('wait')
+            assert state['error'] is None
+            assert (fixture / 'alpha.txt-extracted' / 'alpha.txt').read_text() == 'fixture alpha'
+            capture('02-archive-actions')
+            shutil.rmtree(fixture / 'alpha.txt-extracted')
+            (fixture / 'alpha.txt.zip').unlink()
+            request('action', 'refresh')
+            request('wait')
             state = request('action', 'edit_file', '--name', 'engine.rs')
             state = request('wait')
             assert state['editor']['open']
@@ -293,7 +319,7 @@ def main():
 
             manifest = {'passed': True, 'session': session, 'checks': [
                 'actual renderer PNG capture', 'pixel row selection', 'pixel click and text filtering',
-                'Fyle-styled context menu vector actions and Copy dispatch',
+                'Fyle-styled context menu vector actions, ZIP creation and safe archive extraction',
                 'in-app Rust syntax editing, Unicode-safe find navigation, document tabs and conflict-aware Ctrl+S save',
                 'read-only staged and working diffs, untracked Unicode file review, and bounded Git status',
                 'app-owned PTY command execution, VT screen state, screenshot capture and explicit shell shutdown',

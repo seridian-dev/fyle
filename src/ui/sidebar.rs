@@ -144,7 +144,13 @@ pub fn render_sidebar(
                     action = Some(SidebarAction::Navigate(bookmark.path.clone()));
                 }
                 response.context_menu(|ui| {
-                    if ui.button("Unpin folder").clicked() {
+                    if crate::ui::context_menu::menu_item(
+                        ui,
+                        &format!("bookmark_remove_{index}"),
+                        "Unpin folder",
+                        Icon::Delete,
+                        colors::CRIMSON,
+                    ) {
                         action = Some(SidebarAction::RemoveBookmark(index));
                         ui.close_menu();
                     }

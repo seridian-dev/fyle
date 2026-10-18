@@ -20,10 +20,12 @@ pub enum ContextMenuAction {
     Properties,
     AddBookmark,
     OpenTerminal,
+    CreateZip(PathBuf),
+    ExtractArchive(PathBuf),
     Close,
 }
 
-fn menu_item(ui: &mut Ui, id: &str, label: &str, icon: Icon, accent: Color32) -> bool {
+pub(crate) fn menu_item(ui: &mut Ui, id: &str, label: &str, icon: Icon, accent: Color32) -> bool {
     let (rect, response) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), 29.0), egui::Sense::click());
     response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, false, label));
@@ -83,6 +85,7 @@ pub fn show_context_menu(ctx: &Context, pos: Pos2, target: &FileEntry) -> Contex
 
     egui::Area::new(egui::Id::new("context_menu"))
         .fixed_pos(pos)
+        .constrain(true)
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
             let response = egui::Frame::none()
@@ -119,6 +122,26 @@ pub fn show_context_menu(ctx: &Context, pos: Pos2, target: &FileEntry) -> Contex
                         } else {
                             action = ContextMenuAction::OpenFile(target.path.clone());
                         }
+                    }
+                    if crate::core::is_supported_archive(&target.path)
+                        && menu_item(
+                            ui,
+                            "context_extract_archive",
+                            "Extract to Folder",
+                            Icon::Extract,
+                            colors::CYBER_GREEN,
+                        )
+                    {
+                        action = ContextMenuAction::ExtractArchive(target.path.clone());
+                    }
+                    if menu_item(
+                        ui,
+                        "context_create_zip",
+                        "Compress to ZIP",
+                        Icon::Archive,
+                        colors::MAGENTA,
+                    ) {
+                        action = ContextMenuAction::CreateZip(target.path.clone());
                     }
                     ui.separator();
                     if menu_item(ui, "context_copy", "Copy", Icon::Copy, colors::CYBER_GREEN) {

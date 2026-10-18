@@ -1,9 +1,11 @@
 //! Core file operations module.
 
+mod archive;
 mod bookmarks;
 mod file_ops;
 mod opener;
 
+pub use archive::*;
 pub use bookmarks::*;
 pub use file_ops::*;
 pub use opener::*;

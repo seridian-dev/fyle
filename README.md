@@ -5,7 +5,7 @@
 A [Seridian](https://github.com/seridian-dev) open-source project.
 
 An MIT-licensed Rust file manager with a cyberpunk control-console interface. Browse,
-filter, sort, bookmark, copy, move, rename and delete local files.
+filter, sort, bookmark, copy, move, archive, rename and delete local files.
 Free to use, modify and share. No account or hosted service required.
 
 ## Browsing and editing workspace (0.10)
@@ -41,6 +41,11 @@ categories. Ctrl-click adds/removes selections in either view.
   right-click a pin to remove it. Unconfigured OS user directories are disabled
   in Quick Access. `More` includes New file, Refresh and Open terminal;
   `Ctrl+Alt+T` also opens the desktop terminal.
+- **Archives:** right-click a file or folder and choose **Compress to ZIP**;
+  select several entries to create one ZIP from the selection. ZIP, TAR and
+  gzip-compressed TAR (`.tar.gz`/`.tgz`) archives extract into a new
+  `*-extracted` folder. Extraction rejects path escapes, links and special
+  files, and leaves existing files untouched.
 
 ### Original palette and OpenGL
 
@@ -269,6 +274,11 @@ destinations. Batch copy/move checks predictable collisions before starting.
 Names must be a single component; recursive self-copy, symlinks and special
 files are rejected by copy/move instead of followed implicitly. Cross-device
 moves currently return an error and preserve the source.
+
+Archive creation and extraction run in background jobs. ZIP output never
+replaces an existing file. Extraction stages content before publishing a new
+folder; unsafe entry paths, links, unsupported formats and destination
+collisions are reported in the UI.
 
 These operations are not transactions: disk errors can leave a partly completed
 batch. Rename/move destination checks are not atomic against another program

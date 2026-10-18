@@ -118,6 +118,7 @@ pub fn render_toolbar(
     search_query: &mut String,
     can_go_back: bool,
     can_go_forward: bool,
+    more_open: &mut bool,
 ) -> Option<ToolbarAction> {
     let mut action = None;
     ui.horizontal(|ui| {
@@ -200,28 +201,14 @@ pub fn render_toolbar(
                         .file_name()
                         .unwrap_or(path.as_os_str())
                         .to_string_lossy();
-                    let response = ui
-                        .add(
-                            egui::Button::new(
-                                RichText::new(crate::ui::truncate_name(
-                                    if label == "/" { "Root" } else { &label },
-                                    20,
-                                ))
-                                .color(if *path == current_path {
-                                    colors::TEXT
-                                } else {
-                                    colors::MUTED
-                                }),
-                            )
-                            .frame(false),
-                        )
-                        .on_hover_text(path.display().to_string());
-                    crate::ui::expose_control(
+                    let response = button(
                         ui,
                         &format!("breadcrumb:{}", path.display()),
-                        &label,
-                        &response,
-                    );
+                        &crate::ui::truncate_name(if label == "/" { "Root" } else { &label }, 20),
+                        None,
+                        *path == current_path,
+                    )
+                    .on_hover_text(path.display().to_string());
                     if response.clicked() {
                         action = Some(ToolbarAction::Navigate(path.to_path_buf()));
                     }
@@ -281,31 +268,65 @@ pub fn render_toolbar(
         if button(ui, "folder", "New folder", Some(Icon::Plus), false).clicked() {
             action = Some(ToolbarAction::NewFolder);
         }
-        ui.menu_button("More", |ui| {
-            for (label, value) in [
-                ("New file", ToolbarAction::NewFile),
-                ("Open terminal", ToolbarAction::OpenTerminal),
-                ("Refresh", ToolbarAction::Refresh),
-                ("Appearance", ToolbarAction::Appearance),
-            ] {
-                if button(
-                    ui,
-                    &label.to_lowercase().replace(' ', "_"),
-                    label,
-                    Some(if label == "Open terminal" {
-                        Icon::Terminal
-                    } else {
-                        Icon::Plus
-                    }),
-                    false,
-                )
-                .clicked()
-                {
-                    action = Some(value);
-                    ui.close_menu();
+        let more = button(ui, "toolbar_more", "More", Some(Icon::Plus), *more_open);
+        let more = if *more_open {
+            more
+        } else {
+            more.on_hover_text("More file and workspace actions")
+        };
+        let more_rect = more.rect;
+        if more.clicked() {
+            *more_open = !*more_open;
+        }
+        if *more_open {
+            let popup = egui::Area::new(egui::Id::new("toolbar_more_popup"))
+                .fixed_pos(more_rect.right_bottom() - egui::vec2(196.0, 0.0))
+                .constrain(true)
+                .order(egui::Order::Foreground)
+                .show(ui.ctx(), |ui| {
+                    egui::Frame::none()
+                        .fill(colors::DEEP_CHARCOAL)
+                        .stroke(egui::Stroke::new(1.0_f32, colors::ELECTRIC_BLUE))
+                        .inner_margin(egui::Margin::same(5.0))
+                        .show(ui, |ui| {
+                            ui.set_width(186.0);
+                            for (id, label, icon, value) in [
+                                ("new_file", "New file", Icon::Plus, ToolbarAction::NewFile),
+                                (
+                                    "open_terminal",
+                                    "Open terminal",
+                                    Icon::Terminal,
+                                    ToolbarAction::OpenTerminal,
+                                ),
+                                ("refresh", "Refresh", Icon::Forward, ToolbarAction::Refresh),
+                                (
+                                    "appearance",
+                                    "Appearance",
+                                    Icon::Peek,
+                                    ToolbarAction::Appearance,
+                                ),
+                            ] {
+                                if crate::ui::context_menu::menu_item(
+                                    ui,
+                                    &format!("toolbar_{id}"),
+                                    label,
+                                    icon,
+                                    colors::ELECTRIC_BLUE,
+                                ) {
+                                    action = Some(value);
+                                    *more_open = false;
+                                }
+                            }
+                        });
+                });
+            if ui.ctx().input(|input| input.pointer.primary_clicked()) {
+                if let Some(pointer) = ui.ctx().input(|input| input.pointer.interact_pos()) {
+                    if !more_rect.contains(pointer) && !popup.response.rect.contains(pointer) {
+                        *more_open = false;
+                    }
                 }
             }
-        });
+        }
     });
     action
 }
@@ -324,14 +345,35 @@ pub fn render_bulk_operations(ui: &mut Ui, selected_count: usize) -> Option<Bulk
                     RichText::new(format!("{selected_count} selected"))
                         .color(colors::ELECTRIC_BLUE),
                 );
-                for (label, value) in [
-                    ("Copy", BulkAction::Copy),
-                    ("Cut", BulkAction::Cut),
-                    ("Delete…", BulkAction::Delete),
-                    ("Select all", BulkAction::SelectAll),
-                    ("Clear", BulkAction::SelectNone),
+                for (id, label, icon, value) in [
+                    (
+                        "archive_selection",
+                        "ZIP",
+                        Icon::Archive,
+                        BulkAction::CreateZip,
+                    ),
+                    ("copy_selection", "Copy", Icon::Copy, BulkAction::Copy),
+                    ("cut_selection", "Cut", Icon::Cut, BulkAction::Cut),
+                    (
+                        "delete_selection",
+                        "Delete…",
+                        Icon::Delete,
+                        BulkAction::Delete,
+                    ),
+                    (
+                        "select_all",
+                        "Select all",
+                        Icon::Plus,
+                        BulkAction::SelectAll,
+                    ),
+                    (
+                        "clear_selection",
+                        "Clear",
+                        Icon::Delete,
+                        BulkAction::SelectNone,
+                    ),
                 ] {
-                    if ui.small_button(label).clicked() {
+                    if button(ui, id, label, Some(icon), false).clicked() {
                         action = Some(value);
                     }
                 }
@@ -343,6 +385,7 @@ pub fn render_bulk_operations(ui: &mut Ui, selected_count: usize) -> Option<Bulk
 /// Bulk operation actions.
 #[derive(Debug, Clone)]
 pub enum BulkAction {
+    CreateZip,
     Copy,
     Cut,
     Delete,
