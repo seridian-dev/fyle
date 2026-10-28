@@ -210,9 +210,12 @@ mod tests {
 
     #[test]
     fn uri_parsing_keeps_local_hosts_and_skips_comments_and_schemes() {
+        let path = std::env::current_dir().unwrap().join("a b.txt");
+        let mut local_url = Url::from_file_path(&path).unwrap();
+        local_url.set_host(Some("localhost")).unwrap();
         assert_eq!(
-            parse_uri_list("file://localhost/tmp/a%20b.txt\r\n# note\r\n\n"),
-            vec![PathBuf::from("/tmp/a b.txt")]
+            parse_uri_list(&format!("{local_url}\r\n# note\r\n\n")),
+            vec![path]
         );
         assert_eq!(
             parse_uri_list("https://example.com/a"),
