@@ -56,13 +56,14 @@ pub fn show_delete_dialog(ctx: &Context, paths: &[PathBuf]) -> DialogResult {
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
-                if ui
-                    .button(RichText::new(DELETE_LABEL).color(colors::CRIMSON))
-                    .clicked()
-                {
+                let response = ui.button(RichText::new(DELETE_LABEL).color(colors::CRIMSON));
+                crate::ui::expose_control(ui, "delete_confirm", DELETE_LABEL, &response);
+                if response.clicked() {
                     result = DialogResult::Execute(FileOperation::Remove(paths.to_vec()));
                 }
-                if ui.button("Cancel").clicked() {
+                let response = ui.button("Cancel");
+                crate::ui::expose_control(ui, "delete_cancel", "Cancel", &response);
+                if response.clicked() {
                     result = DialogResult::Closed;
                 }
             });

@@ -13,6 +13,13 @@ impl FileManager {
     }
 
     pub(super) fn handle_keyboard(&mut self, ctx: &egui::Context) {
+        if self.dialog == DialogType::None
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Comma))
+        {
+            self.appearance_open = true;
+            self.preferences_section = PreferencesSection::General;
+            return;
+        }
         if self.terminal.is_open() {
             if ctx.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl && i.modifiers.alt) {
                 self.terminal.toggle(&self.current_path);
@@ -153,7 +160,7 @@ impl FileManager {
     /// confirm dialogs as in-app copy/move. Drops are ignored while an
     /// operation or dialog is active; those states already disable mutations.
     pub(super) fn handle_external_drop(&mut self, ctx: &egui::Context) {
-        if self.operation.is_some() || self.dialog != DialogType::None {
+        if self.storage.open || self.operation.is_some() || self.dialog != DialogType::None {
             return;
         }
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
@@ -180,7 +187,10 @@ impl FileManager {
     pub(super) fn handle_toolbar_action(&mut self, action: ToolbarAction) {
         match action {
             ToolbarAction::Navigate(path) => self.navigate_to(path),
-            ToolbarAction::Appearance => self.appearance_open = true,
+            ToolbarAction::Appearance => {
+                self.appearance_open = true;
+                self.preferences_section = PreferencesSection::General;
+            }
             ToolbarAction::Location => self.open_location(),
             ToolbarAction::GoBack => self.go_back(),
             ToolbarAction::Refresh => self.load_entries(),

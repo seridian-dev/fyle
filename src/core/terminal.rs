@@ -7,8 +7,9 @@
 use anyhow::{Context, Result};
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::{
+    ffi::OsStr,
     io::{Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
 };
@@ -36,6 +37,7 @@ pub struct TerminalRun {
     pub foreground: [u8; 3],
     pub background: Option<[u8; 3]>,
     pub bold: bool,
+    pub italic: bool,
 }
 
 pub struct TerminalSession {
@@ -50,10 +52,9 @@ pub struct TerminalSession {
 impl TerminalSession {
     pub fn spawn(directory: &Path) -> Result<Self> {
         anyhow::ensure!(directory.is_dir(), "Terminal location is not a directory");
-        let shell = std::env::var_os("SHELL")
-            .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| "/bin/sh".into());
-        Self::spawn_shell(directory, Path::new(&shell))
+        let configured = std::env::var_os("SHELL");
+        let shell = select_shell(configured.as_deref(), cfg!(target_os = "macos"));
+        Self::spawn_shell(directory, &shell)
     }
 
     fn spawn_shell(directory: &Path, shell: &Path) -> Result<Self> {
@@ -67,6 +68,11 @@ impl TerminalSession {
         let mut command = CommandBuilder::new(shell);
         command.cwd(directory);
         command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
+        command.env("TERM_PROGRAM", "Fyle");
+        if shell_uses_login_flag(shell) {
+            command.arg("-l");
+        }
         let child = pair
             .slave
             .spawn_command(command)
@@ -134,6 +140,7 @@ impl TerminalSession {
                         && last.foreground == foreground
                         && last.background == background
                         && last.bold == cell.bold()
+                        && last.italic == cell.italic()
                         && last.col + last.width == col
                 }) {
                     last.text.push_str(text);
@@ -147,6 +154,7 @@ impl TerminalSession {
                         foreground,
                         background,
                         bold: cell.bold(),
+                        italic: cell.italic(),
                     });
                 }
             }
@@ -195,6 +203,25 @@ impl TerminalSession {
     pub fn process_id(&self) -> Option<u32> {
         self.child.process_id()
     }
+}
+
+fn select_shell(configured: Option<&OsStr>, macos: bool) -> PathBuf {
+    if let Some(path) = configured.map(PathBuf::from).filter(|path| path.is_file()) {
+        return path;
+    }
+    let fallback = if macos { "/bin/zsh" } else { "/bin/sh" };
+    if Path::new(fallback).is_file() {
+        PathBuf::from(fallback)
+    } else {
+        PathBuf::from("/bin/sh")
+    }
+}
+
+fn shell_uses_login_flag(shell: &Path) -> bool {
+    matches!(
+        shell.file_name().and_then(OsStr::to_str),
+        Some("zsh" | "bash" | "fish")
+    )
 }
 
 fn terminal_color(color: vt100::Color) -> Option<[u8; 3]> {
@@ -246,6 +273,30 @@ impl Drop for TerminalSession {
 mod tests {
     use super::*;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn configured_shell_is_respected_and_macos_defaults_to_zsh() {
+        let dir = tempfile::tempdir().unwrap();
+        let shell = dir.path().join("my-shell");
+        std::fs::write(&shell, "").unwrap();
+        assert_eq!(select_shell(Some(shell.as_os_str()), true), shell);
+        assert_eq!(
+            select_shell(Some(Path::new("/does/not/exist").as_os_str()), true),
+            PathBuf::from(if Path::new("/bin/zsh").is_file() {
+                "/bin/zsh"
+            } else {
+                "/bin/sh"
+            })
+        );
+        assert_eq!(select_shell(None, false), PathBuf::from("/bin/sh"));
+    }
+
+    #[test]
+    fn interactive_shells_use_login_mode_without_changing_parent_environment() {
+        assert!(shell_uses_login_flag(Path::new("/bin/zsh")));
+        assert!(shell_uses_login_flag(Path::new("/bin/bash")));
+        assert!(!shell_uses_login_flag(Path::new("/bin/sh")));
+    }
 
     #[test]
     fn pty_runs_a_child_local_shell_and_captures_output() {

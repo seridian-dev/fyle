@@ -18,7 +18,7 @@ const HELP: &str = "Fyle GUI harness (opt-in, this app only)
   gui state [--session ID] [--offset N] [--limit N]
   gui wait [--session ID] [--timeout SECONDS]
   gui screenshot [--session ID] [--output image.png]
-  gui action <navigate|back|forward|up|refresh|search|view|select|open_folder|edit_file|editor_save|editor_close|review|review_refresh|review_select|review_layer|terminal_open|terminal_new|terminal_select|terminal_close|terminal_close_active|terminal_send|toggle_hidden|new_folder|new_file|palette|peek|new_tab|switch_tab|close_tab|location|appearance|dismiss_error|cancel>
+  gui action <navigate|back|forward|up|refresh|search|view|select|open_folder|edit_file|editor_save|editor_close|review|review_refresh|review_select|review_layer|terminal_open|terminal_new|terminal_select|terminal_split|terminal_close|terminal_close_active|terminal_send|toggle_hidden|new_folder|new_file|palette|peek|new_tab|switch_tab|close_tab|location|appearance|preferences|preferences_appearance|preferences_terminal|storage_open|storage_scan|storage_select|storage_drill|storage_trash|dismiss_error|cancel>
       [--path PATH | --query TEXT | --mode list|grid|staged|working | --name NAME | --command TEXT] [--session ID]
   gui click --x X --y Y --snapshot ID [--button left|right] [--session ID]
   gui text --text TEXT [--snapshot ID] [--session ID]

@@ -71,6 +71,7 @@ fn main() -> Result<(), eframe::Error> {
         options,
         Box::new(move |cc| {
             setup_cyberpunk_theme(&cc.egui_ctx);
+            app::register_terminal_font(&cc.egui_ctx);
             let mut app = FileManager::new_with_target(launch_target);
             app.initialize_appearance(&cc.egui_ctx, cc.gl.as_deref());
             if automation {

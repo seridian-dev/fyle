@@ -5,6 +5,7 @@ mod discovery;
 mod editor;
 mod render;
 mod review;
+mod storage;
 mod terminal;
 mod workspace;
 use crate::theme::colors;
@@ -33,11 +34,69 @@ use eframe::egui::{self, RichText};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+pub(crate) const TERMINAL_FONT_FAMILY: &str = "fyle_terminal_nerd";
+pub(crate) const SYSTEM_TERMINAL_FONT_FAMILY: &str = "fyle_terminal_system";
+
+pub(crate) fn register_terminal_font(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        TERMINAL_FONT_FAMILY.to_owned(),
+        egui::FontData::from_static(include_bytes!(
+            "../assets/fonts/JetBrainsMonoNerdFont-Regular.ttf"
+        )),
+    );
+    if let Some(system_font) = system_monospace_font() {
+        fonts.font_data.insert(
+            SYSTEM_TERMINAL_FONT_FAMILY.to_owned(),
+            egui::FontData::from_owned(system_font),
+        );
+    }
+    let mut family = fonts
+        .families
+        .get(&egui::FontFamily::Monospace)
+        .cloned()
+        .unwrap_or_default();
+    family.insert(0, TERMINAL_FONT_FAMILY.to_owned());
+    fonts.families.insert(
+        egui::FontFamily::Name(TERMINAL_FONT_FAMILY.into()),
+        family.clone(),
+    );
+    let mut system_family = family;
+    system_family.retain(|font| font != TERMINAL_FONT_FAMILY);
+    if fonts.font_data.contains_key(SYSTEM_TERMINAL_FONT_FAMILY) {
+        system_family.insert(0, SYSTEM_TERMINAL_FONT_FAMILY.to_owned());
+    }
+    system_family.push(TERMINAL_FONT_FAMILY.to_owned());
+    fonts.families.insert(
+        egui::FontFamily::Name(SYSTEM_TERMINAL_FONT_FAMILY.into()),
+        system_family,
+    );
+    ctx.set_fonts(fonts);
+}
+
+fn system_monospace_font() -> Option<Vec<u8>> {
+    #[cfg(target_os = "macos")]
+    let candidates = [
+        "/System/Library/Fonts/SFNSMono.ttf",
+        "/System/Library/Fonts/Supplemental/Andale Mono.ttf",
+    ];
+    #[cfg(target_os = "linux")]
+    let candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf",
+    ];
+    #[cfg(target_os = "windows")]
+    let candidates = ["C:\\Windows\\Fonts\\consola.ttf"];
+    candidates.iter().find_map(|path| std::fs::read(path).ok())
+}
+
 pub(crate) struct FileManager {
     automation: Option<automation::Automation>,
     appearance: fyle::appearance::Appearance,
     appearance_store: fyle::appearance::SettingsStore,
     appearance_open: bool,
+    preferences_section: PreferencesSection,
     appearance_error: Option<String>,
     shader: Option<std::sync::Arc<crate::theme::shader::HudShader>>,
     shader_error: Option<String>,
@@ -63,6 +122,7 @@ pub(crate) struct FileManager {
     palette: discovery::Palette,
     editor: editor::Editor,
     review: review::Review,
+    storage: storage::StorageExplorer,
     terminal: terminal::TerminalPanel,
     preview_open: bool,
     preview_wrap: bool,
@@ -83,6 +143,14 @@ pub(crate) struct FileManager {
     create_file_state: CreateFileState,
     history: Vec<PathBuf>,
     forward_history: Vec<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum PreferencesSection {
+    #[default]
+    General,
+    Appearance,
+    Terminal,
 }
 
 impl FileManager {
@@ -111,6 +179,7 @@ impl FileManager {
             appearance,
             appearance_store,
             appearance_open: false,
+            preferences_section: PreferencesSection::General,
             appearance_error,
             shader: None,
             shader_error: None,
@@ -136,6 +205,7 @@ impl FileManager {
             palette: Default::default(),
             editor: editor::Editor::default(),
             review: review::Review::default(),
+            storage: storage::StorageExplorer::default(),
             terminal: terminal::TerminalPanel::default(),
             preview_open: false,
             preview_wrap: true,
@@ -205,7 +275,11 @@ impl FileManager {
                     self.error_message = Some(format!("File operation failed: {error:#}"));
                 }
                 self.operation = None;
-                self.load_entries();
+                if self.storage.open {
+                    self.storage.refresh();
+                } else {
+                    self.load_entries();
+                }
             }
         }
     }

@@ -56,6 +56,7 @@ impl FileManager {
             return;
         }
         self.tabs[self.active_tab] = self.snapshot_tab();
+        self.storage.open = false;
         self.tabs.push(self.snapshot_tab());
         self.active_tab = self.tabs.len() - 1;
         self.load_entries();
@@ -68,6 +69,7 @@ impl FileManager {
         {
             return;
         }
+        self.storage.open = false;
         self.tabs[self.active_tab] = self.snapshot_tab();
         self.restore_tab(index);
     }
@@ -107,6 +109,7 @@ impl FileManager {
         let mut switch = None;
         let mut close = None;
         let mut new = false;
+        let mut open_storage = false;
         egui::ScrollArea::horizontal()
             .id_source("workspace_tabs")
             .show(ui, |ui| {
@@ -154,17 +157,28 @@ impl FileManager {
                             }
                         });
                     }
+                    let response = ui
+                        .selectable_label(self.storage.open, "Storage")
+                        .on_hover_text("Analyze folder sizes");
+                    crate::ui::expose_control(ui, "storage_tab", "Storage Explorer", &response);
+                    open_storage = response.clicked();
                     let response = ui.button("+").on_hover_text("New tab · Ctrl+T");
                     crate::ui::expose_control(ui, "new_tab", "New tab", &response);
                     new = response.clicked();
                 });
             });
         if let Some(index) = close {
+            self.storage.open = false;
             self.close_tab(index);
         } else if let Some(index) = switch {
+            self.storage.open = false;
             self.switch_tab(index);
         } else if new {
+            self.storage.open = false;
             self.new_tab();
+        } else if open_storage {
+            self.storage.open = true;
+            self.storage.scan(self.current_path.clone());
         }
     }
     pub(super) fn open_location(&mut self) {
