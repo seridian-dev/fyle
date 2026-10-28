@@ -194,6 +194,19 @@ impl FileManager {
                                                 ui.heading("Terminal");
                                                 ui.label("Shape your shell workspace. Changes preview live.");
                                                 ui.add_space(18.0);
+                                                preference_group(ui, "INTEGRATIONS");
+                                                let response = ui.checkbox(
+                                                    &mut self.appearance.allow_external_terminals,
+                                                    "Allow Foot / cmux integration",
+                                                );
+                                                crate::ui::expose_control(ui, "preferences_external_terminals", "Allow external terminal integration", &response);
+                                                let status = if self.appearance.allow_external_terminals {
+                                                    super::terminal::external_terminal_name().map(|name| format!("Detected {name}; external handoff is enabled.")).unwrap_or_else(|| "No supported external terminal found. The built-in terminal remains available.".into())
+                                                } else {
+                                                    "Disabled. Fyle will keep terminal sessions in its own popout.".into()
+                                                };
+                                                ui.small(status);
+                                                ui.add_space(14.0);
                                                 preference_group(ui, "TYPOGRAPHY");
                                                 preference_row(ui, "Font family", |ui| {
                                                     egui::ComboBox::from_id_source("terminal_font")
@@ -247,19 +260,6 @@ impl FileManager {
                                                     .show(ui, |ui| {
                                                         ui.label(egui::RichText::new("❯ ~/Projects/fyle   main  ✦ ready").monospace().color(colors::CYBER_GREEN));
                                                     });
-                                                ui.add_space(14.0);
-                                                preference_group(ui, "INTEGRATIONS");
-                                                let response = ui.checkbox(
-                                                    &mut self.appearance.allow_external_terminals,
-                                                    "Allow Foot / cmux integration",
-                                                );
-                                                crate::ui::expose_control(ui, "preferences_external_terminals", "Allow external terminal integration", &response);
-                                                let status = if self.appearance.allow_external_terminals {
-                                                    super::terminal::external_terminal_name().map(|name| format!("Detected {name}; external handoff is enabled.")).unwrap_or_else(|| "No supported external terminal found. The built-in terminal remains available.".into())
-                                                } else {
-                                                    "Disabled. Fyle will keep terminal sessions in its own popout.".into()
-                                                };
-                                                ui.small(status);
                                             }
                                             }
                                         });
