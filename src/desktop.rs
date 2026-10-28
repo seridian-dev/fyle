@@ -1,5 +1,7 @@
 //! Pure desktop/session policy. Keep environment reads in the OS boundary.
 
+pub mod dnd;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DesktopEnvironment {
     Plasma,
