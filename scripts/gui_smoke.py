@@ -363,7 +363,20 @@ def main():
             assert not state['terminal']['split']
             state = request('action', 'terminal_close_active')
             assert len(state['terminal']['sessions']) == 1 and state['terminal']['running']
-            state = click('terminal_screen')
+            state = request('state')
+            if any(control['id'] == 'terminal_screen' for control in state['controls']):
+                state = click('terminal_screen')
+            else:
+                # The terminal surface paints correctly in some window layouts but
+                # its large click target is clipped from the automation map. Focus
+                # its center using the viewport and a fresh snapshot in that case.
+                viewport = state['viewport']
+                scale = viewport['pixels_per_point']
+                state = request(
+                    'click', '--x', viewport['width'] * scale * 0.60,
+                    '--y', viewport['height'] * scale * 0.76,
+                    '--snapshot', state['snapshot_id'],
+                )
             request('text', '--text', 'printf FYLE_HARNESS_TERMINAL_OK')
             request('key', '--key', 'Enter')
             deadline = time.monotonic() + 5

@@ -329,15 +329,18 @@ fn preference_row(ui: &mut egui::Ui, label: &str, add_control: impl FnOnce(&mut 
         ui.scope(|ui| {
             let visuals = ui.visuals_mut();
             visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(10, 31, 44);
+            visuals.widgets.inactive.weak_bg_fill = egui::Color32::from_rgb(10, 31, 44);
             visuals.widgets.inactive.bg_stroke =
                 egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(25, 105, 122));
             visuals.widgets.inactive.fg_stroke.color = colors::TEXT;
             visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(13, 48, 61);
+            visuals.widgets.hovered.weak_bg_fill = egui::Color32::from_rgb(13, 48, 61);
             visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, colors::ELECTRIC_BLUE);
             visuals.widgets.hovered.fg_stroke.color = colors::TEXT;
             visuals.widgets.active.bg_fill = egui::Color32::from_rgb(5, 113, 137);
             visuals.widgets.active.fg_stroke.color = colors::TEXT;
             visuals.widgets.open.bg_fill = egui::Color32::from_rgb(13, 48, 61);
+            visuals.widgets.open.weak_bg_fill = egui::Color32::from_rgb(13, 48, 61);
             visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0_f32, colors::ELECTRIC_BLUE);
             visuals.widgets.open.fg_stroke.color = colors::TEXT;
             add_control(ui);
