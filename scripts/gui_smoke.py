@@ -315,6 +315,12 @@ def main():
             assert summary['apparent_bytes'] == 33792 and summary['file_count'] == 2
             assert summary['directory_count'] == 1
             assert {entry['name'] for entry in summary['entries']} == {'big.bin', 'nested'}
+            request('action', 'storage_select', '--name', 'big.bin')
+            state = request('action', 'peek')
+            state = request('wait')
+            assert state['preview']['path'] == str(scan_fixture / 'big.bin')
+            state = request('action', 'peek')
+            assert not state['preview']['open']
             request('action', 'storage_select', '--name', 'nested')
             state = request('action', 'storage_drill')
             state = request('wait')

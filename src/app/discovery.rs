@@ -218,7 +218,9 @@ impl FileManager {
         }
     }
     pub(super) fn poll_preview(&mut self) {
-        let path = if self.preview_open && self.selected_entries.len() == 1 {
+        let path = if self.preview_open && self.storage.open {
+            self.storage.selected_preview_path()
+        } else if self.preview_open && self.selected_entries.len() == 1 {
             self.entries
                 .iter()
                 .find(|entry| entry.selected && !entry.is_dir)

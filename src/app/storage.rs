@@ -332,6 +332,17 @@ impl StorageExplorer {
     pub(super) fn selected(&self) -> Option<&PathBuf> {
         self.selected.as_ref()
     }
+
+    pub(super) fn selected_preview_path(&self) -> Option<PathBuf> {
+        let selected = self.selected.as_ref()?;
+        self.summary
+            .as_ref()?
+            .entries
+            .iter()
+            .find(|entry| entry.path == *selected)
+            .filter(|entry| entry.kind == fyle::core::storage::StorageEntryKind::File)
+            .map(|entry| entry.path.clone())
+    }
 }
 
 fn storage_button(ui: &mut egui::Ui, label: &str, accent: egui::Color32) -> egui::Response {
