@@ -94,14 +94,7 @@ jobs:
         shell: bash
         run: |
           cargo build --locked --release --bins
-          VERSION="${GITHUB_REF_NAME#v}"
-          ARCH="${{ matrix.arch }}"
-          BUNDLE="fyle-${VERSION}-macos-${ARCH}"
-          mkdir -p "dist/${BUNDLE}/bin"
-          install -m 0755 target/release/fyle "dist/${BUNDLE}/bin/fyle"
-          install -m 0755 target/release/fyle-cli "dist/${BUNDLE}/bin/fyle-cli"
-          install -m 0644 LICENSE README.md "dist/${BUNDLE}/"
-          tar -C dist -czf "dist/${BUNDLE}.tar.gz" "$BUNDLE"
+          scripts/package_macos.sh "${GITHUB_REF_NAME#v}" "${{ matrix.arch }}"
       - name: Build Windows binaries
         if: matrix.platform == 'windows'
         shell: pwsh

@@ -174,6 +174,8 @@ impl eframe::App for FileManager {
                     && !self.location_open
                     && !self.appearance_open,
             );
+            #[cfg(target_os = "macos")]
+            ui.add_space(26.0);
             self.render_tabs(ui);
             ui.add_space(4.0);
             let can_go_back = !self.history.is_empty();
