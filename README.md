@@ -4,10 +4,9 @@
 
 A [Seridian](https://github.com/seridian-dev) open-source project.
 
-An MIT-licensed Rust file manager with a focused midnight-and-aqua identity and
-a cyberpunk control-console interface. Browse, filter, sort, bookmark, copy,
-move, archive, rename and delete local files. Free to use, modify and share. No
-account or hosted service required. See [the visual identity guide](docs/brand.md).
+An MIT-licensed Rust file manager with a cyberpunk control-console interface. Browse,
+filter, sort, bookmark, copy, move, archive, rename and delete local files.
+Free to use, modify and share. No account or hosted service required.
 
 ## Browsing and editing workspace (0.10)
 
@@ -101,10 +100,8 @@ built on Ubuntu 22.04 and require glibc 2.35 or newer plus the system graphics
 libraries listed in [release installation notes](docs/releases.md). The tarball
 avoids a package manager, but it does not bundle those system libraries. Alpine
 Linux is not currently supported by these glibc builds. macOS Intel/Apple Silicon
-and Windows x86_64/ARM64 archives are published alongside Linux packages. The
-macOS archive includes a Finder-ready `Fyle.app` and the `fyle-cli` support tool.
-Copy `Fyle.app` to `/Applications` or `~/Applications`. Every release includes
-`SHA256SUMS`.
+and Windows x86_64/ARM64 archives are published alongside Linux packages. Every
+release includes `SHA256SUMS`.
 
 Install a current stable Rust toolchain, Bash and Python 3. On Debian/Ubuntu,
 install `build-essential pkg-config libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev xdg-utils git python3`.
