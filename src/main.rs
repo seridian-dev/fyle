@@ -8,6 +8,32 @@ use fyle::{core, types};
 use theme::setup_cyberpunk_theme;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+fn app_icon() -> Option<egui::IconData> {
+    let decoder = png::Decoder::new(std::io::Cursor::new(include_bytes!(
+        "../assets/fyle-256.png"
+    )));
+    let mut reader = decoder.read_info().ok()?;
+    if reader.output_color_type().0 != png::ColorType::Rgba {
+        return None;
+    }
+    let mut rgba = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut rgba).ok()?;
+    rgba.truncate(info.buffer_size());
+    Some(egui::IconData {
+        rgba,
+        width: info.width,
+        height: info.height,
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn configure_macos_viewport(viewport: egui::ViewportBuilder) -> egui::ViewportBuilder {
+    viewport
+        .with_fullsize_content_view(true)
+        .with_titlebar_shown(false)
+        .with_title_shown(false)
+}
+
 fn main() -> Result<(), eframe::Error> {
     // Initialize logging
     fyle::diagnostics::init_gui();
@@ -23,13 +49,20 @@ fn main() -> Result<(), eframe::Error> {
         fyle::diagnostics::revision()
     );
 
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_inner_size([1024.0, 768.0])
+        .with_min_inner_size([600.0, 400.0])
+        .with_resizable(true)
+        .with_title("Fyle")
+        .with_app_id("dev.seridian.fyle");
+    if let Some(icon) = app_icon() {
+        viewport = viewport.with_icon(icon);
+    }
+    #[cfg(target_os = "macos")]
+    let viewport = configure_macos_viewport(viewport);
+
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1024.0, 768.0])
-            .with_min_inner_size([600.0, 400.0])
-            .with_resizable(true)
-            .with_title("Fyle - File Manager")
-            .with_app_id("fyle"),
+        viewport,
         ..Default::default()
     };
 
@@ -58,4 +91,26 @@ fn main() -> Result<(), eframe::Error> {
         );
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_app_icon_decodes_to_a_square_rgba_image() {
+        let icon = app_icon().expect("bundled Fyle PNG icon should decode");
+        assert_eq!((icon.width, icon.height), (256, 256));
+        assert_eq!(icon.rgba.len(), (icon.width * icon.height * 4) as usize);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_titlebar_is_transparent_and_keeps_native_controls() {
+        let viewport = configure_macos_viewport(egui::ViewportBuilder::default());
+        assert_eq!(viewport.fullsize_content_view, Some(true));
+        assert_eq!(viewport.titlebar_shown, Some(false));
+        assert_eq!(viewport.title_shown, Some(false));
+        assert_ne!(viewport.titlebar_buttons_shown, Some(false));
+    }
 }

@@ -2,7 +2,7 @@
 Version=1.0
 Name=Fyle
 GenericName=File Manager
-Comment=A cyberpunk-themed file manager
+Comment=A focused workspace for local files
 Exec=fyle %u
 Icon=fyle
 Terminal=false

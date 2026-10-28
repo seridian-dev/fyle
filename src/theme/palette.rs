@@ -21,8 +21,8 @@ pub const CRIMSON: Color32 = Color32::from_rgb(255, 7, 58);
 /// Cyan - hyperlink color.
 pub const CYAN: Color32 = Color32::from_rgb(0, 255, 255);
 
-/// Deep charcoal - panel background.
-pub const DEEP_CHARCOAL: Color32 = Color32::from_rgb(10, 10, 10);
+/// Midnight surface shared by the app panels and the macOS titlebar backdrop.
+pub const DEEP_CHARCOAL: Color32 = Color32::from_rgb(7, 16, 24);
 
 /// Dark slate blue - window background.
 pub const DARK_SLATE: Color32 = Color32::from_rgb(26, 26, 46);
