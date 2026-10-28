@@ -56,8 +56,8 @@ pub fn parse_cf_hdrop(payload: &[u8]) -> Vec<PathBuf> {
 fn read_wide_strings(bytes: &[u8]) -> Vec<String> {
     let mut units = Vec::new();
     let mut items = Vec::new();
-    for chunk in bytes.chunks_exact(2) {
-        let unit = u16::from_le_bytes([chunk[0], chunk[1]]);
+    for chunk in bytes.as_chunks::<2>().0 {
+        let unit = u16::from_le_bytes(*chunk);
         if unit != 0 {
             units.push(unit);
         } else if units.is_empty() {

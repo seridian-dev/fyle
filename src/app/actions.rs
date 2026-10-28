@@ -149,6 +149,33 @@ impl FileManager {
         }
     }
 
+    /// Route files dropped in from another application through the same
+    /// confirm dialogs as in-app copy/move. Drops are ignored while an
+    /// operation or dialog is active; those states already disable mutations.
+    pub(super) fn handle_external_drop(&mut self, ctx: &egui::Context) {
+        if self.operation.is_some() || self.dialog != DialogType::None {
+            return;
+        }
+        let dropped = ctx.input(|i| i.raw.dropped_files.clone());
+        if dropped.is_empty() {
+            return;
+        }
+        let effect = ctx
+            .input(|i| fyle::desktop::dnd::drag_effect(i.raw.modifiers.alt, i.raw.modifiers.shift));
+        let paths: Vec<PathBuf> = dropped.into_iter().filter_map(|file| file.path).collect();
+        if let Some(intent) = fyle::desktop::dnd::incoming_intent(paths, &self.current_path, effect)
+        {
+            self.dialog = match intent.effect {
+                fyle::desktop::dnd::DragEffect::Copy => {
+                    DialogType::ConfirmCopy(intent.paths, self.current_path.clone())
+                }
+                fyle::desktop::dnd::DragEffect::Move => {
+                    DialogType::ConfirmMove(intent.paths, self.current_path.clone())
+                }
+            };
+        }
+    }
+
     /// Handle toolbar actions.
     pub(super) fn handle_toolbar_action(&mut self, action: ToolbarAction) {
         match action {

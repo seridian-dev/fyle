@@ -15,6 +15,7 @@ of tiny crates until separate dependency or release requirements justify one.
 | `src/core/job.rs` | Typed mutation intent and background execution | Operation scheduling |
 | `src/core/bookmarks.rs` | Persistent bookmarks | Storage format and migrations |
 | `src/desktop.rs` | Pure desktop policy and command construction | Desktop and terminal differences |
+| `src/desktop/dnd.rs` | Drag-and-drop payload parsing, intents and outgoing payload building | Cross-platform DnD format and policy |
 | `src/core/opener.rs` | Process execution and executable discovery | OS integration |
 | `src/startup.rs` | CLI path/URL resolution | Launcher contracts |
 | `src/app.rs` | GUI state and navigation | Interaction state |
@@ -39,6 +40,26 @@ Bookmarks currently retain the legacy `cyberpunk_fm/bookmarks.json` location
 under the OS config directory. Changing that requires a migration and tests.
 The current clipboard is internal to Fyle. D-Bus FileManager1, remote mounts,
 and session-wide clipboard integration are future adapters, not implied support.
+
+## External drag-and-drop boundary
+
+`desktop::dnd` is pure policy: it parses incoming `text/uri-list` (percent-
+encoded local `file:` URIs kept, comments, blank lines and non-file or remote
+URIs ignored) and Windows `CF_HDROP` blobs (wide or ANSI lists; truncated
+payloads yield only their complete leading entries), reduces parsed paths to
+a `DropIntent` against the destination (self and descendant targets, plus
+duplicates, are filtered), and builds outgoing `text/uri-list`/`CF_HDROP`
+payloads with an item count. eframe 0.27 delivers OS drops as decoded
+`DroppedFile` paths and has no API to start a native drag, so drag-out payload
+construction is the shim surface for a future NSDraggingSession/OLE/XDND
+adapter; no native drag initiation exists today.
+
+GUI drops route through the same ConfirmCopy/ConfirmMove dialogs and
+`OperationJob` as in-app paste (default copy, Alt/Shift requests move where
+the toolkit reports modifiers), and are ignored while an operation or dialog
+is active. A hovered-drop overlay reports the item count. Native drag-image
+and move-effect negotiation with the target application are platform work not
+covered by headless tests.
 
 Rendering emits typed `FileOperation` requests. The composition root starts a
 single `OperationJob`, disables conflicting controls until completion, preserves

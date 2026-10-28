@@ -54,6 +54,39 @@ impl FileManager {
         }
     }
 
+    /// Highlight the window while files from another application hover it.
+    /// egui reports hovered drops per frame; the count says what will be
+    /// copied when the drag is released.
+    fn render_drop_overlay(&self, ctx: &egui::Context) {
+        let count = ctx.input(|i| i.raw.hovered_files.len());
+        if count == 0 || self.operation.is_some() || self.dialog != DialogType::None {
+            return;
+        }
+        let painter = ctx.layer_painter(egui::LayerId::new(
+            egui::Order::Tooltip,
+            egui::Id::new("external_drop_overlay"),
+        ));
+        let rect = ctx.screen_rect().shrink(18.0);
+        painter.rect_filled(
+            rect,
+            10.0,
+            egui::Color32::from_rgba_unmultiplied(2, 32, 24, 190),
+        );
+        painter.rect_stroke(rect, 10.0, egui::Stroke::new(2.0_f32, colors::CYBER_GREEN));
+        let label = format!(
+            "DROP {} ITEM{} INTO THIS FOLDER",
+            count,
+            if count == 1 { "" } else { "S" }
+        );
+        painter.text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            label,
+            egui::FontId::monospace(16.0),
+            colors::CYBER_GREEN,
+        );
+    }
+
     /// A stable status line keeps the file viewport from jumping on selection.
     fn render_details_panel(&self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
@@ -127,10 +160,12 @@ impl eframe::App for FileManager {
         // Handle keyboard shortcuts
         if self.operation.is_none() {
             self.handle_keyboard(ctx);
+            self.handle_external_drop(ctx);
         }
 
         // Show error messages
         self.show_error(ctx);
+        self.render_drop_overlay(ctx);
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.set_enabled(

@@ -60,11 +60,11 @@ pub fn open_terminal(path: &Path) -> Result<()> {
 pub fn get_system_terminal() -> &'static str {
     #[cfg(target_os = "macos")]
     {
-        return "open";
+        "open"
     }
     #[cfg(target_os = "windows")]
     {
-        return "cmd";
+        "cmd"
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
