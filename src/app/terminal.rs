@@ -693,6 +693,7 @@ fn selection_text(
 enum ExternalTerminal {
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Foot,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Cmux,
 }
 
@@ -709,6 +710,7 @@ pub(super) fn external_terminal_name() -> Option<&'static str> {
 }
 
 fn find_executable(name: &str) -> Option<std::path::PathBuf> {
+    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
     let mut directories = std::env::var_os("PATH")
         .into_iter()
         .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
