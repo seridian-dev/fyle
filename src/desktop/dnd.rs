@@ -20,6 +20,12 @@ pub fn parse_single_uri(uri: &str) -> Option<PathBuf> {
     if url.scheme() != "file" {
         return None;
     }
+    if url
+        .host_str()
+        .is_some_and(|host| !host.eq_ignore_ascii_case("localhost"))
+    {
+        return None;
+    }
     url.to_file_path().ok()
 }
 
