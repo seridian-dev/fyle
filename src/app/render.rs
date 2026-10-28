@@ -158,6 +158,19 @@ impl eframe::App for FileManager {
         self.workspace_input(input);
     }
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        #[cfg(target_os = "macos")]
+        if self
+            .native_menu
+            .as_ref()
+            .is_some_and(crate::native_menu::NativeMenu::take_settings_request)
+        {
+            if self.appearance_open {
+                self.appearance_open = false;
+            } else {
+                self.appearance_open = true;
+                self.preferences_section = PreferencesSection::General;
+            }
+        }
         if self.operation.is_some() && ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.error_message = Some(

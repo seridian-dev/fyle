@@ -288,6 +288,7 @@ impl FileManager {
     pub(super) fn handle_sidebar_action(&mut self, action: SidebarAction) {
         match action {
             SidebarAction::Navigate(path) => self.navigate_to(path),
+            SidebarAction::StorageExplorer => self.storage.toggle(&self.current_path),
             SidebarAction::RemoveBookmark(index) => {
                 if remove_bookmark(&mut self.bookmarks, index) {
                     if let Err(e) = save_bookmarks(&self.bookmarks) {

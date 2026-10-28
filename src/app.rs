@@ -98,6 +98,8 @@ pub(crate) struct FileManager {
     appearance_open: bool,
     preferences_section: PreferencesSection,
     appearance_error: Option<String>,
+    #[cfg(target_os = "macos")]
+    native_menu: Option<crate::native_menu::NativeMenu>,
     shader: Option<std::sync::Arc<crate::theme::shader::HudShader>>,
     shader_error: Option<String>,
     current_path: PathBuf,
@@ -154,6 +156,11 @@ enum PreferencesSection {
 }
 
 impl FileManager {
+    #[cfg(target_os = "macos")]
+    pub(crate) fn install_native_menu(&mut self, ctx: &egui::Context) {
+        self.native_menu = Some(crate::native_menu::NativeMenu::install(ctx.clone()));
+    }
+
     pub(crate) fn new_with_target(target: fyle::startup::LaunchTarget) -> Self {
         let mut app = Self::new(target.directory);
         if let Some(file) = target.file {
@@ -181,6 +188,8 @@ impl FileManager {
             appearance_open: false,
             preferences_section: PreferencesSection::General,
             appearance_error,
+            #[cfg(target_os = "macos")]
+            native_menu: None,
             shader: None,
             shader_error: None,
             current_path: current_path.clone(),

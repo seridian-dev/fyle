@@ -300,6 +300,10 @@ def main():
             assert not state['preferences']['allow_external_terminals']
             click('appearance_save')
             click('preferences_close')
+            state = click('storage_explorer')
+            assert state['storage']['open'], state['storage']
+            state = click('storage_explorer')
+            assert not state['storage']['open'], state['storage']
             cli_scan = subprocess.run([cli, 'storage', 'scan', str(scan_fixture)],
                                       capture_output=True, text=True, timeout=30)
             assert cli_scan.returncode == 0, cli_scan.stderr

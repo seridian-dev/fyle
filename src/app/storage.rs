@@ -1,15 +1,17 @@
 //! Frequently changing Storage Explorer UI over the headless core scanner.
 use super::*;
 use anyhow::Context;
+use std::path::Path;
 
 #[derive(Default)]
 pub(super) struct StorageExplorer {
     pub open: bool,
     root: PathBuf,
     root_input: String,
-    job: Option<fyle::core::storage::StorageScanJob>,
+    tree_job: Option<fyle::core::storage::TreeScanJob>,
     progress: fyle::core::storage::StorageProgress,
     summary: Option<fyle::core::storage::StorageSummary>,
+    tree: Option<fyle::core::storage::DiskNode>,
     selected: Option<PathBuf>,
     error: Option<String>,
 }
@@ -21,6 +23,13 @@ pub(super) enum StorageAction {
 }
 
 impl StorageExplorer {
+    pub(super) fn toggle(&mut self, current_path: &Path) {
+        self.open = !self.open;
+        if self.open && self.root.as_os_str().is_empty() {
+            self.root_input = current_path.display().to_string();
+        }
+    }
+
     pub(super) fn automation_state(&self) -> serde_json::Value {
         let summary = self.summary.as_ref().map(|summary| {
             serde_json::json!({
@@ -82,29 +91,38 @@ impl StorageExplorer {
     }
 
     pub(super) fn is_scanning(&self) -> bool {
-        self.job.is_some()
+        self.tree_job.is_some()
     }
 
     pub(super) fn scan(&mut self, root: PathBuf) {
         self.root_input = root.display().to_string();
         self.root = root.clone();
-        self.job = Some(fyle::core::storage::StorageScanJob::start(root));
+        self.tree_job = Some(fyle::core::storage::TreeScanJob::start(root));
         self.progress = Default::default();
         self.summary = None;
+        self.tree = None;
         self.selected = None;
         self.error = None;
     }
 
     pub(super) fn poll(&mut self) {
-        if let Some(job) = &self.job {
+        if let Some(job) = &self.tree_job {
             if let Some(progress) = job.poll_progress() {
                 self.progress = progress;
             }
             if let Some(result) = job.poll_result() {
-                self.job = None;
+                self.tree_job = None;
                 match result {
-                    Ok(summary) => self.summary = Some(summary),
-                    Err(error) => self.error = Some(format!("Storage scan failed: {error:#}")),
+                    Ok(tree) => {
+                        self.summary =
+                            Some(summary_from_tree(&tree, self.progress.unreadable_entries));
+                        self.tree = Some(tree);
+                    }
+                    Err(error) => {
+                        if !error.to_string().contains("cancelled") {
+                            self.error = Some(format!("Storage scan failed: {error:#}"));
+                        }
+                    }
                 }
             }
         }
@@ -129,7 +147,7 @@ impl StorageExplorer {
         ui.horizontal(|ui| {
             ui.heading("Storage Explorer");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let response = ui.button("Preferences…");
+                let response = storage_button(ui, "Preferences…", colors::ELECTRIC_BLUE);
                 crate::ui::expose_control(ui, "storage_preferences", "Preferences", &response);
                 if response.clicked() {
                     action = Some(StorageAction::Preferences);
@@ -143,14 +161,14 @@ impl StorageExplorer {
                     .desired_width(ui.available_width() - 80.0)
                     .hint_text("Folder path"),
             );
-            let response = ui.button("Scan");
+            let response = storage_button(ui, "Scan", colors::CYBER_GREEN);
             crate::ui::expose_control(ui, "storage_scan", "Scan folder", &response);
             if response.clicked() {
                 self.scan(PathBuf::from(self.root_input.clone()));
             }
         });
 
-        if self.job.is_some() {
+        if self.tree_job.is_some() {
             ui.horizontal(|ui| {
                 ui.spinner();
                 ui.label(format!(
@@ -160,10 +178,10 @@ impl StorageExplorer {
                 let response = ui.small_button("Cancel");
                 crate::ui::expose_control(ui, "storage_cancel", "Cancel scan", &response);
                 if response.clicked() {
-                    if let Some(job) = &self.job {
+                    if let Some(job) = &self.tree_job {
                         job.cancel();
                     }
-                    self.job = None;
+                    self.tree_job = None;
                 }
             });
         }
@@ -195,7 +213,10 @@ impl StorageExplorer {
                 }
             });
             ui.small("Apparent sizes count logical file lengths. Symlinks are skipped; unreadable paths are excluded.");
-            Self::render_treemap(ui, &summary.entries, &mut self.selected);
+            let pie_drill = render_disk_pie(ui, self.tree.as_ref(), &mut self.selected);
+            if drill.is_none() {
+                drill = pie_drill;
+            }
 
             if let Some(path) = self.selected.as_ref() {
                 ui.horizontal(|ui| {
@@ -208,7 +229,7 @@ impl StorageExplorer {
                         entry.path == *path
                             && entry.kind == fyle::core::storage::StorageEntryKind::Directory
                     }) {
-                        let response = ui.button("Open folder");
+                        let response = storage_button(ui, "Open folder", colors::ELECTRIC_BLUE);
                         crate::ui::expose_control(
                             ui,
                             "storage_drill",
@@ -221,7 +242,7 @@ impl StorageExplorer {
                     }
                     #[cfg(feature = "trash")]
                     {
-                        let response = ui.button("Move to Trash…");
+                        let response = storage_button(ui, "Move to Trash…", colors::CRIMSON);
                         crate::ui::expose_control(
                             ui,
                             "storage_trash",
@@ -277,83 +298,6 @@ impl StorageExplorer {
         action
     }
 
-    fn render_treemap(
-        ui: &mut egui::Ui,
-        entries: &[fyle::core::storage::StorageEntry],
-        selected: &mut Option<PathBuf>,
-    ) {
-        const MAP_ITEMS: usize = 20;
-        let width = ui.available_width().max(1.0);
-        let height = 126.0;
-        let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-        ui.painter().rect_filled(rect, 6.0, colors::DARK_SLATE);
-        if entries.is_empty() {
-            ui.painter().text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                "No visible items",
-                egui::FontId::proportional(14.0),
-                colors::MUTED,
-            );
-            return;
-        }
-
-        let shown = entries.len().min(MAP_ITEMS);
-        let mut items: Vec<(String, u64, Option<PathBuf>)> = entries
-            .iter()
-            .take(shown)
-            .map(|entry| {
-                (
-                    entry.name.clone(),
-                    entry.apparent_bytes,
-                    Some(entry.path.clone()),
-                )
-            })
-            .collect();
-        let other_bytes = entries
-            .iter()
-            .skip(shown)
-            .map(|entry| entry.apparent_bytes)
-            .sum::<u64>();
-        if entries.len() > shown {
-            items.push(("Other items".into(), other_bytes, None));
-        }
-        let weights: Vec<f64> = items.iter().map(|item| item.1.max(1) as f64).collect();
-        let mut blocks = vec![egui::Rect::NOTHING; items.len()];
-        split_treemap(&weights, 0, weights.len(), rect, &mut blocks);
-        for (index, ((name, bytes, path), block)) in items.iter().zip(blocks).enumerate() {
-            let hue = [
-                colors::ELECTRIC_BLUE,
-                colors::CYBER_GREEN,
-                colors::AMBER,
-                colors::MAGENTA,
-            ][index % 4];
-            ui.painter()
-                .rect_filled(block.shrink(1.0), 3.0, hue.gamma_multiply(0.68));
-            if block.width() >= 52.0 && block.height() >= 28.0 {
-                ui.painter().text(
-                    block.center(),
-                    egui::Align2::CENTER_CENTER,
-                    crate::ui::truncate_name(name, 16),
-                    egui::FontId::proportional(11.0),
-                    colors::TEXT,
-                );
-            }
-            if let Some(path) = path {
-                let response = ui
-                    .interact(
-                        block,
-                        egui::Id::new(("storage_map", index)),
-                        egui::Sense::click(),
-                    )
-                    .on_hover_text(format!("{} · {}", name, format_size(*bytes)));
-                if response.clicked() {
-                    *selected = Some(path.clone());
-                }
-            }
-        }
-    }
-
     pub(super) fn render_status(&self, ui: &mut egui::Ui) {
         if let Some(summary) = &self.summary {
             ui.label(
@@ -366,7 +310,7 @@ impl StorageExplorer {
                 .size(12.0)
                 .color(colors::MUTED),
             );
-        } else if self.job.is_some() {
+        } else if self.tree_job.is_some() {
             ui.label(
                 RichText::new(format!(
                     "Scanning {} entries…",
@@ -390,61 +334,391 @@ impl StorageExplorer {
     }
 }
 
-fn split_treemap(
-    weights: &[f64],
-    start: usize,
-    end: usize,
-    rect: egui::Rect,
-    output: &mut [egui::Rect],
-) {
-    if end.saturating_sub(start) <= 1 {
-        if let Some(slot) = output.get_mut(start) {
-            *slot = rect;
-        }
-        return;
-    }
-    let total: f64 = weights[start..end].iter().sum();
-    let mut left_total = 0.0;
-    let mut split = start + 1;
-    for (index, weight) in weights.iter().enumerate().take(end - 1).skip(start) {
-        left_total += weight;
-        split = index + 1;
-        if left_total >= total / 2.0 {
-            break;
-        }
-    }
-    let ratio = (left_total / total).clamp(0.08, 0.92) as f32;
-    if rect.width() >= rect.height() {
-        let x = rect.left() + rect.width() * ratio;
-        split_treemap(
-            weights,
-            start,
-            split,
-            egui::Rect::from_min_max(rect.min, egui::pos2(x, rect.bottom())),
-            output,
+fn storage_button(ui: &mut egui::Ui, label: &str, accent: egui::Color32) -> egui::Response {
+    let response = ui.add(
+        egui::Button::new(RichText::new(label).strong().color(colors::TEXT))
+            .fill(accent.gamma_multiply(0.24))
+            .stroke(egui::Stroke::new(1.0_f32, accent)),
+    );
+    if response.hovered() {
+        ui.painter().rect_stroke(
+            response.rect.expand(1.0),
+            4.0,
+            egui::Stroke::new(1.0_f32, accent.gamma_multiply(0.65)),
         );
-        split_treemap(
-            weights,
-            split,
-            end,
-            egui::Rect::from_min_max(egui::pos2(x, rect.top()), rect.max),
-            output,
+    }
+    response
+}
+
+fn summary_from_tree(
+    tree: &fyle::core::storage::DiskNode,
+    unreadable_entries: u64,
+) -> fyle::core::storage::StorageSummary {
+    use fyle::core::storage::{StorageEntry, StorageEntryKind, StorageSummary};
+
+    fn counts(node: &fyle::core::storage::DiskNode, include_directory: bool) -> (u64, u64) {
+        if node.kind == StorageEntryKind::File {
+            return (1, 0);
+        }
+        let mut files = 0;
+        let mut directories = u64::from(include_directory);
+        for child in &node.children {
+            let (child_files, child_directories) = counts(child, true);
+            files += child_files;
+            directories += child_directories;
+        }
+        (files, directories)
+    }
+
+    let (file_count, directory_count) = counts(tree, false);
+    let entries = tree
+        .children
+        .iter()
+        .map(|child| {
+            let (file_count, directory_count) = counts(child, false);
+            StorageEntry {
+                path: child.path.clone(),
+                name: child.name.clone(),
+                kind: child.kind,
+                apparent_bytes: child.apparent_bytes,
+                file_count,
+                directory_count,
+            }
+        })
+        .collect();
+
+    StorageSummary {
+        root: tree.path.clone(),
+        apparent_bytes: tree.apparent_bytes,
+        file_count,
+        directory_count,
+        unreadable_entries,
+        omitted_root_entries: 0,
+        entries,
+    }
+}
+
+/// Sunburst donut over the scanned tree: one ring per directory level,
+/// hover tooltips, click to select, click a selected folder again to drill.
+fn render_disk_pie(
+    ui: &mut egui::Ui,
+    tree: Option<&fyle::core::storage::DiskNode>,
+    selected: &mut Option<PathBuf>,
+) -> Option<PathBuf> {
+    const PIE_HEIGHT: f32 = 280.0;
+    let width = ui.available_width();
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(width, PIE_HEIGHT), egui::Sense::click());
+    let painter = ui.painter();
+    painter.rect_filled(rect, 6.0, colors::DARK_SLATE);
+
+    let Some(tree) = tree else {
+        painter.text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "Building disk map…",
+            egui::FontId::proportional(13.0),
+            colors::MUTED,
+        );
+        return None;
+    };
+
+    let radius = (PIE_HEIGHT * 0.5 - 14.0).min(width * 0.5 - 14.0);
+    let center = rect.center();
+    let hole = radius * 0.34;
+    let ring = (radius - hole) / PIE_RINGS as f32;
+
+    // Neon glow behind the donut.
+    for (extra, alpha) in [(10.0, 0.05), (6.0, 0.10), (3.0, 0.18)] {
+        painter.circle_stroke(
+            center,
+            radius + extra,
+            egui::Stroke::new(extra * 0.8, colors::ELECTRIC_BLUE.gamma_multiply(alpha)),
+        );
+    }
+
+    let mut segments: Vec<PieSegment> = Vec::new();
+    collect_pie_segments(tree, 0.0, 1.0, hole, hole + ring, 0, &mut segments);
+    for segment in &segments {
+        paint_pie_segment(ui, center, segment, false);
+    }
+
+    // Center readout: total usage, or the selected item.
+    if let Some(path) = selected.as_ref() {
+        if let Some(segment) = segments
+            .iter()
+            .find(|segment| segment.path.as_ref() == Some(path))
+        {
+            let percent = if tree.apparent_bytes > 0 {
+                segment.bytes as f64 / tree.apparent_bytes as f64 * 100.0
+            } else {
+                0.0
+            };
+            painter.text(
+                center + egui::vec2(0.0, -9.0),
+                egui::Align2::CENTER_CENTER,
+                crate::ui::truncate_name(&segment.name, 18),
+                egui::FontId::proportional(12.0),
+                colors::TEXT,
+            );
+            painter.text(
+                center + egui::vec2(0.0, 8.0),
+                egui::Align2::CENTER_CENTER,
+                format!("{} · {percent:.1}%", format_size(segment.bytes)),
+                egui::FontId::proportional(11.0),
+                colors::CYBER_GREEN,
+            );
+        }
+    } else if tree.children.is_empty() {
+        painter.text(
+            center,
+            egui::Align2::CENTER_CENTER,
+            "Empty folder",
+            egui::FontId::proportional(12.0),
+            colors::MUTED,
         );
     } else {
-        let y = rect.top() + rect.height() * ratio;
-        split_treemap(
-            weights,
-            start,
-            split,
-            egui::Rect::from_min_max(rect.min, egui::pos2(rect.right(), y)),
-            output,
+        painter.text(
+            center + egui::vec2(0.0, -9.0),
+            egui::Align2::CENTER_CENTER,
+            format_size(tree.apparent_bytes),
+            egui::FontId::proportional(14.0),
+            colors::CYBER_GREEN,
         );
-        split_treemap(
-            weights,
-            split,
-            end,
-            egui::Rect::from_min_max(egui::pos2(rect.left(), y), rect.max),
-            output,
+        painter.text(
+            center + egui::vec2(0.0, 9.0),
+            egui::Align2::CENTER_CENTER,
+            "APPARENT USAGE",
+            egui::FontId::proportional(9.0),
+            colors::MUTED,
         );
     }
+
+    // Hover highlight, tooltip and click handling.
+    let mut drill = None;
+    let hovered = response
+        .hover_pos()
+        .and_then(|pos| hit_test_pie(center, radius, &segments, pos));
+    if let Some(segment) = hovered {
+        paint_pie_segment(ui, center, segment, true);
+        let percent = if tree.apparent_bytes > 0 {
+            segment.bytes as f64 / tree.apparent_bytes as f64 * 100.0
+        } else {
+            0.0
+        };
+        let kind = if segment.is_dir { "Folder" } else { "File" };
+        let _ = response.clone().on_hover_text(format!(
+            "{kind} · {}\n{} · {percent:.1}% of scan\n{}",
+            format_size(segment.bytes),
+            segment.name,
+            segment
+                .path
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "Aggregated smaller items".to_string()),
+        ));
+    }
+    if response.clicked() {
+        match response
+            .interact_pointer_pos()
+            .and_then(|pos| hit_test_pie(center, radius, &segments, pos))
+        {
+            Some(segment) => {
+                let already_selected =
+                    segment.path.is_some() && selected.as_ref() == segment.path.as_ref();
+                if already_selected && segment.is_dir {
+                    drill = segment.path.clone();
+                } else if let Some(path) = &segment.path {
+                    *selected = Some(path.clone());
+                }
+            }
+            None => {
+                if let Some(pos) = response.interact_pointer_pos() {
+                    if pos.distance(center) < hole {
+                        *selected = None;
+                    }
+                }
+            }
+        }
+    }
+    drill
+}
+
+const PIE_RINGS: usize = 4;
+const PIE_MAX_CHILDREN: usize = 24;
+const PIE_MAX_SEGMENTS: usize = 4000;
+const PIE_MIN_SPAN: f64 = 1e-4;
+
+struct PieSegment {
+    path: Option<PathBuf>,
+    name: String,
+    bytes: u64,
+    is_dir: bool,
+    start: f64,
+    span: f64,
+    inner: f32,
+    outer: f32,
+    depth: usize,
+}
+
+fn collect_pie_segments(
+    node: &fyle::core::storage::DiskNode,
+    start: f64,
+    span: f64,
+    inner: f32,
+    outer: f32,
+    depth: usize,
+    out: &mut Vec<PieSegment>,
+) {
+    if node.children.is_empty() || node.apparent_bytes == 0 || span <= 0.0 {
+        return;
+    }
+    if out.len() >= PIE_MAX_SEGMENTS {
+        return;
+    }
+    let shown = node.children.len().min(PIE_MAX_CHILDREN);
+    let mut cursor = start;
+    for child in &node.children[..shown] {
+        let child_span = span * child.apparent_bytes as f64 / node.apparent_bytes as f64;
+        if child_span >= PIE_MIN_SPAN {
+            out.push(PieSegment {
+                path: Some(child.path.clone()),
+                name: child.name.clone(),
+                bytes: child.apparent_bytes,
+                is_dir: child.kind == fyle::core::storage::StorageEntryKind::Directory,
+                start: cursor,
+                span: child_span,
+                inner,
+                outer,
+                depth,
+            });
+            if depth + 1 < PIE_RINGS
+                && child.kind == fyle::core::storage::StorageEntryKind::Directory
+            {
+                collect_pie_segments(
+                    child,
+                    cursor,
+                    child_span,
+                    outer,
+                    outer + (outer - inner),
+                    depth + 1,
+                    out,
+                );
+            }
+        }
+        cursor += child_span;
+    }
+    if shown < node.children.len() {
+        let rest: u64 = node.children[shown..]
+            .iter()
+            .map(|child| child.apparent_bytes)
+            .sum();
+        if rest > 0 {
+            out.push(PieSegment {
+                path: None,
+                name: format!("{} more items", node.children.len() - shown),
+                bytes: rest,
+                is_dir: false,
+                start: cursor,
+                span: span * rest as f64 / node.apparent_bytes as f64,
+                inner,
+                outer,
+                depth,
+            });
+        }
+    }
+}
+
+fn pie_hue(index: usize, depth: usize) -> egui::Color32 {
+    const HUES: [egui::Color32; 4] = [
+        colors::ELECTRIC_BLUE,
+        colors::CYBER_GREEN,
+        colors::AMBER,
+        colors::MAGENTA,
+    ];
+    HUES[index % 4].gamma_multiply((1.0 - 0.22 * depth as f32).max(0.45))
+}
+
+fn lighten(color: egui::Color32, amount: f32) -> egui::Color32 {
+    let mix = |channel: u8| (channel as f32 + (255.0 - channel as f32) * amount).round() as u8;
+    egui::Color32::from_rgb(mix(color.r()), mix(color.g()), mix(color.b()))
+}
+
+fn paint_pie_segment(ui: &egui::Ui, center: egui::Pos2, segment: &PieSegment, emphasized: bool) {
+    let painter = ui.painter();
+    let steps = ((segment.span * 360.0).ceil() as usize).clamp(2, 90);
+    let mut points = Vec::with_capacity(steps * 2 + 2);
+    for step in 0..=steps {
+        let fraction = segment.start + segment.span * step as f64 / steps as f64;
+        points.push(pie_point(center, segment.outer, fraction));
+    }
+    for step in (0..=steps).rev() {
+        let fraction = segment.start + segment.span * step as f64 / steps as f64;
+        points.push(pie_point(center, segment.inner, fraction));
+    }
+    let base = pie_hue(
+        // Stable per-name color so items do not flicker between frames.
+        segment
+            .path
+            .as_ref()
+            .map(|path| simple_hash(&path.display().to_string()))
+            .unwrap_or(3),
+        segment.depth,
+    );
+    let fill = if emphasized {
+        lighten(base, 0.35)
+    } else {
+        base
+    };
+    let stroke = if emphasized {
+        egui::Stroke::new(2.0_f32, colors::TEXT)
+    } else {
+        egui::Stroke::new(1.0_f32, colors::DARK_SLATE)
+    };
+    painter.add(egui::Shape::Path(egui::epaint::PathShape {
+        points,
+        closed: true,
+        fill,
+        stroke,
+    }));
+}
+
+fn pie_point(center: egui::Pos2, radius: f32, fraction: f64) -> egui::Pos2 {
+    use std::f64::consts::TAU;
+    let angle = fraction * TAU;
+    egui::pos2(
+        center.x + (radius as f64 * angle.sin()) as f32,
+        center.y - (radius as f64 * angle.cos()) as f32,
+    )
+}
+
+fn hit_test_pie(
+    center: egui::Pos2,
+    max_radius: f32,
+    segments: &[PieSegment],
+    pos: egui::Pos2,
+) -> Option<&PieSegment> {
+    use std::f64::consts::TAU;
+    let dx = (pos.x - center.x) as f64;
+    let dy = (pos.y - center.y) as f64;
+    let distance = (dx * dx + dy * dy).sqrt() as f32;
+    if distance > max_radius {
+        return None;
+    }
+    let mut fraction = dx.atan2(-dy) / TAU;
+    if fraction < 0.0 {
+        fraction += 1.0;
+    }
+    segments.iter().find(|segment| {
+        distance >= segment.inner
+            && distance < segment.outer
+            && fraction >= segment.start
+            && fraction < segment.start + segment.span
+    })
+}
+
+fn simple_hash(text: &str) -> usize {
+    text.bytes().fold(0_usize, |hash, byte| {
+        hash.wrapping_mul(31).wrapping_add(byte as usize)
+    })
 }

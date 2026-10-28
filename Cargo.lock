@@ -1519,6 +1519,7 @@ version = "0.10.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "cocoa",
  "dirs",
  "eframe",
  "egui",
@@ -1527,6 +1528,7 @@ dependencies = [
  "getrandom 0.2.16",
  "libc",
  "log",
+ "objc",
  "png",
  "portable-pty",
  "serde",
