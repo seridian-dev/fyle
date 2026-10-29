@@ -250,28 +250,32 @@ impl TerminalPanel {
                 );
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let close = ui.small_button("×").on_hover_text("Close all sessions");
+                let close =
+                    crate::ui::buttons::compact(ui, "×").on_hover_text("Close all sessions");
                 crate::ui::expose_control(ui, "terminal_close", "Close terminal", &close);
                 close_all_clicked = close.clicked();
-                let split = ui.button(if self.split.is_some() {
-                    "Unsplit"
-                } else {
-                    "Split right"
-                });
+                let split = crate::ui::buttons::subtle(
+                    ui,
+                    if self.split.is_some() {
+                        "Unsplit"
+                    } else {
+                        "Split right"
+                    },
+                );
                 crate::ui::expose_control(ui, "terminal_split", "Toggle split pane", &split);
                 split_clicked = split.clicked();
-                let new = ui.button("+ Shell");
+                let new = crate::ui::buttons::accent(ui, "+ Shell", crate::theme::colors::CYAN);
                 crate::ui::expose_control(ui, "terminal_new", "New shell", &new);
                 if new.clicked() {
                     self.new_session(current_path);
                 }
-                let end = ui.small_button("End session");
+                let end = crate::ui::buttons::compact(ui, "End session");
                 crate::ui::expose_control(ui, "terminal_close_active", "End active session", &end);
                 if end.clicked() {
                     close_active_clicked = true;
                 }
                 if appearance.allow_external_terminals && external_terminal_name().is_some() {
-                    let external = ui.button("Open in external");
+                    let external = crate::ui::buttons::subtle(ui, "Open in external");
                     crate::ui::expose_control(
                         ui,
                         "terminal_external",

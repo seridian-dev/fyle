@@ -1,6 +1,7 @@
 //! Local discovery interactions: command palette, lenses and asynchronous peek.
 use super::*;
 use fyle::core::{discovery::fuzzy_score, preview::Preview};
+use std::time::Duration;
 
 #[derive(Clone)]
 enum Target {
@@ -193,7 +194,7 @@ impl FileManager {
                 ui.separator();
                 ui.horizontal(|ui| {
                     ui.small("Up/Down choose · Enter jump · Esc close");
-                    close = ui.small_button("Close").clicked();
+                    close = crate::ui::buttons::compact(ui, "Close").clicked();
                 });
             });
         if close {
@@ -218,19 +219,20 @@ impl FileManager {
         }
     }
     pub(super) fn poll_preview(&mut self) {
-        let path = if self.preview_open && self.storage.open {
-            self.storage.selected_preview_path()
-        } else if self.preview_open && self.selected_entries.len() == 1 {
-            self.entries
-                .iter()
-                .find(|entry| entry.selected && !entry.is_dir)
-                .map(|entry| entry.path.clone())
+        let selected_path = self.preview_selection_path();
+        #[cfg(target_os = "macos")]
+        crate::native_preview::selection_changed(selected_path.as_deref());
+
+        let path = if self.preview_open {
+            selected_path
         } else {
             None
         };
         if path != self.preview_path {
+            self.audio_preview.stop();
             self.preview_path = path.clone();
             self.preview_result = None;
+            self.preview_texture = None;
             self.preview_loading = path.is_some();
             if let Some(path) = path {
                 self.preview_loader.request(path);
@@ -243,35 +245,115 @@ impl FileManager {
             self.preview_result = Some(result);
         }
     }
+
+    pub(super) fn preview_selection_path(&self) -> Option<std::path::PathBuf> {
+        if self.storage.open {
+            self.storage.selected_preview_path()
+        } else if self.selected_entries.len() == 1 {
+            self.entries
+                .iter()
+                .find(|entry| entry.selected && !entry.is_dir)
+                .map(|entry| entry.path.clone())
+        } else {
+            None
+        }
+    }
     pub(super) fn render_preview(&mut self, ctx: &egui::Context) {
         if !self.preview_open {
             return;
         }
-        egui::SidePanel::right("peek_panel")
-            .default_width(320.0)
-            .min_width(180.0)
+        if self.preview_texture.as_ref().map(|(path, _)| path) != self.preview_path.as_ref() {
+            if let (
+                Some(path),
+                Some(Ok(Preview::Image {
+                    rgba,
+                    width,
+                    height,
+                })),
+            ) = (&self.preview_path, &self.preview_result)
+            {
+                let image = egui::ColorImage::from_rgba_unmultiplied(
+                    [*width as usize, *height as usize],
+                    rgba,
+                );
+                self.preview_texture = Some((
+                    path.clone(),
+                    ctx.load_texture("quick-look-preview", image, egui::TextureOptions::LINEAR),
+                ));
+            }
+        }
+
+        let mut close = false;
+        // Use a fresh egui area id so existing installations with the older,
+        // larger Peek rectangle pick up this more compact default once.
+        egui::Window::new("quick_look_preview_compact")
+            .id(egui::Id::new("quick_look_preview_compact"))
+            .title_bar(false)
+            .collapsible(false)
             .resizable(true)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .default_size(egui::vec2(500.0, 360.0))
+            .min_size(egui::vec2(320.0, 240.0))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.heading("Inspector");
-                    if ui.small_button("Close").clicked() {
-                        self.preview_open = false;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.small(RichText::new("Local · read only").color(colors::MUTED));
-                    let response = ui.checkbox(&mut self.preview_wrap, "Wrap");
-                    crate::ui::expose_control(ui, "preview_wrap", "Wrap preview text", &response);
+                    ui.label(
+                        RichText::new("FYLE  /  QUICK LOOK")
+                            .color(colors::CYBER_GREEN)
+                            .monospace(),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        close = crate::ui::buttons::compact(ui, "Close  ×").clicked();
+                        if let Some(path) = &self.preview_path {
+                            ui.label(
+                                RichText::new(
+                                    path.file_name().unwrap_or_default().to_string_lossy(),
+                                )
+                                .color(colors::MUTED)
+                                .small(),
+                            )
+                            .on_hover_text(path.display().to_string());
+                        }
+                    });
                 });
                 ui.separator();
-                if let Some(path) = &self.preview_path {
-                    ui.label(path.file_name().unwrap_or_default().to_string_lossy())
-                        .on_hover_text(path.display().to_string());
-                }
+                ui.horizontal(|ui| {
+                    ui.small(
+                        RichText::new("SPACE or Esc to close  ·  Local preview")
+                            .color(colors::MUTED),
+                    );
+                    if matches!(&self.preview_result, Some(Ok(Preview::Text { .. }))) {
+                        let response = ui.checkbox(&mut self.preview_wrap, "Wrap");
+                        crate::ui::expose_control(
+                            ui,
+                            "preview_wrap",
+                            "Wrap preview text",
+                            &response,
+                        );
+                    }
+                });
+                ui.separator();
+                let available = ui.available_size();
                 if self.preview_loading {
-                    ui.spinner();
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(available.y * 0.35);
+                        ui.spinner();
+                        ui.label("Preparing preview…");
+                    });
                 }
                 match &self.preview_result {
+                    Some(Ok(Preview::Image { width, height, .. })) => {
+                        if let Some((_, texture)) = &self.preview_texture {
+                            let size = egui::vec2(*width as f32, *height as f32);
+                            let scale = (available.x / size.x).min(available.y / size.y);
+                            let display_size = size * scale.max(0.01);
+                            ui.vertical_centered(|ui| {
+                                ui.add_space(((available.y - display_size.y).max(0.0)) * 0.5);
+                                ui.add(egui::Image::new(texture).fit_to_exact_size(display_size));
+                            });
+                        } else {
+                            ui.spinner();
+                        }
+                    }
                     Some(Ok(Preview::Text { text, truncated })) => {
                         if *truncated {
                             ui.colored_label(colors::AMBER, "Showing the first 32 KiB");
@@ -289,21 +371,101 @@ impl FileManager {
                                 );
                             });
                     }
+                    Some(Ok(Preview::Audio)) => {
+                        let status = self.audio_preview.status();
+                        let path = self.preview_path.clone();
+                        ui.vertical_centered(|ui| {
+                            ui.add_space((available.y * 0.08).max(8.0));
+                            ui.label(RichText::new("♫").size(38.0).color(colors::CYBER_GREEN));
+                            if let Some(path) = &path {
+                                ui.heading(path.file_name().unwrap_or_default().to_string_lossy());
+                            }
+                            ui.label(
+                                RichText::new("LOCAL AUDIO PREVIEW")
+                                    .small()
+                                    .monospace()
+                                    .color(colors::MUTED),
+                            );
+                            ui.add_space(8.0);
+                            ui.horizontal(|ui| {
+                                if crate::ui::buttons::accent(
+                                    ui,
+                                    if status.playing { "Pause" } else { "Play" },
+                                    colors::CYBER_GREEN,
+                                )
+                                .clicked()
+                                {
+                                    if let Some(path) = &path {
+                                        self.audio_preview.toggle(path.clone());
+                                    }
+                                }
+                                if crate::ui::buttons::compact(ui, "Stop").clicked() {
+                                    self.audio_preview.stop();
+                                }
+                            });
+                            if let Some(duration) = status.duration {
+                                let total = duration.as_secs_f32().max(0.01);
+                                let mut position = status.position.as_secs_f32().clamp(0.0, total);
+                                let seek = ui.add_sized(
+                                    [ui.available_width().min(420.0), 20.0],
+                                    egui::Slider::new(&mut position, 0.0..=total).show_value(false),
+                                );
+                                if seek.changed() {
+                                    self.audio_preview.seek(Duration::from_secs_f32(position));
+                                }
+                                ui.label(format!(
+                                    "{}  /  {}",
+                                    format_audio_time(status.position),
+                                    format_audio_time(duration)
+                                ));
+                            } else {
+                                ui.label("Duration unavailable");
+                            }
+                            let mut volume = status.volume;
+                            ui.horizontal(|ui| {
+                                ui.label("Volume");
+                                if ui
+                                    .add_sized(
+                                        [140.0, 20.0],
+                                        egui::Slider::new(&mut volume, 0.0..=1.0).show_value(false),
+                                    )
+                                    .changed()
+                                {
+                                    self.audio_preview.set_volume(volume);
+                                }
+                            });
+                            if let Some(error) = status.error {
+                                ui.colored_label(colors::AMBER, error);
+                            }
+                        });
+                    }
                     Some(Ok(Preview::Unsupported)) => {
-                        ui.label(
-                            "Binary or unsupported encoding. Use your preferred app to open it.",
-                        );
+                        ui.vertical_centered(|ui| {
+                            ui.add_space(available.y * 0.3);
+                            ui.heading("Preview unavailable");
+                            ui.label(
+                                "This file format is not supported by Fyle’s built-in preview.",
+                            );
+                        });
                     }
                     Some(Err(error)) => {
                         ui.colored_label(colors::AMBER, format!("{error:#}"));
                     }
                     None if !self.preview_loading => {
-                        ui.label("Select one text or source file to peek inside.");
+                        ui.label("Select one file to preview.");
                     }
                     None => {}
                 }
             });
+        if close {
+            self.preview_open = false;
+        }
     }
+}
+
+fn format_audio_time(duration: Duration) -> String {
+    let total_seconds = duration.as_secs();
+    format!("{:02}:{:02}", total_seconds / 60, total_seconds % 60)
 }
 
 #[cfg(test)]

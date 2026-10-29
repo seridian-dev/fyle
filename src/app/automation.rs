@@ -65,6 +65,7 @@ impl FileManager {
             "name":entry.name, "path":entry.path.to_string_lossy(), "is_dir":entry.is_dir, "size":entry.size, "selected":entry.selected,
         })).collect();
         let rect = ctx.screen_rect();
+        let audio = self.audio_preview.status();
         json!({
             "schema_version":1, "version":env!("CARGO_PKG_VERSION"), "revision":fyle::diagnostics::revision(),
             "path":self.current_path.to_string_lossy(), "view":format!("{:?}",self.view_mode).to_lowercase(),
@@ -78,7 +79,7 @@ impl FileManager {
             "tabs":{"active":self.active_tab,"items":self.tabs.iter().enumerate().map(|(index,tab)|json!({"path":if index==self.active_tab {&self.current_path}else{&tab.path},"query":if index==self.active_tab {&self.search_query}else{&tab.query}})).collect::<Vec<_>>()},
             "location":{"open":self.location_open,"input":self.location_input,"error":self.location_error},
             "palette":{"open":self.palette.open,"query":self.palette.query},
-            "preview":{"open":self.preview_open,"wrap":self.preview_wrap,"loading":self.preview_loading,"path":self.preview_path,"kind":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {..}))=>"text",Some(Ok(_))=>"unsupported",Some(Err(_))=>"error",None=>"none" },"text":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {text,..}))=>Some(text),_=>None }},
+            "preview":{"open":self.preview_open,"wrap":self.preview_wrap,"loading":self.preview_loading,"path":self.preview_path,"kind":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {..}))=>"text",Some(Ok(fyle::core::preview::Preview::Image {..}))=>"image",Some(Ok(fyle::core::preview::Preview::Audio))=>"audio",Some(Ok(_))=>"unsupported",Some(Err(_))=>"error",None=>"none" },"text":match &self.preview_result { Some(Ok(fyle::core::preview::Preview::Text {text,..}))=>Some(text),_=>None },"audio":{"playing":audio.playing,"position_secs":audio.position.as_secs_f32(),"duration_secs":audio.duration.map(|duration| duration.as_secs_f32()),"error":audio.error}},
             "editor":self.editor.automation_state(),
             "review":self.review.automation_state(),
             "terminal":self.terminal.state(),

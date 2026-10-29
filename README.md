@@ -104,7 +104,7 @@ and Windows x86_64/ARM64 archives are published alongside Linux packages. Every
 release includes `SHA256SUMS`.
 
 Install a current stable Rust toolchain, Bash and Python 3. On Debian/Ubuntu,
-install `build-essential pkg-config libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev xdg-utils git python3`.
+install `build-essential pkg-config libasound2-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev xdg-utils git python3`.
 For desktop entry validation install `desktop-file-utils`.
 
 ```sh

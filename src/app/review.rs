@@ -1,4 +1,5 @@
 //! Session-local read-only Git change list and diff viewer.
+use crate::theme::colors;
 use eframe::egui::{self, Color32, RichText};
 use std::path::PathBuf;
 
@@ -161,7 +162,7 @@ impl Review {
                         .color(crate::theme::colors::MUTED),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("↻  REFRESH").clicked() {
+                        if crate::ui::buttons::accent(ui, "↻  REFRESH", colors::CYAN).clicked() {
                             self.refresh(directory.clone());
                         }
                         if ui

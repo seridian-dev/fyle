@@ -83,8 +83,19 @@ impl FileManager {
         {
             return;
         }
+        #[cfg(target_os = "macos")]
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::ALT, egui::Key::Space)) {
+            let path = self.preview_selection_path();
+            self.preview_open = false;
+            crate::native_preview::toggle(path.as_deref());
+            return;
+        }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space)) {
-            self.preview_open = !self.preview_open;
+            self.preview_open = if self.preview_open {
+                false
+            } else {
+                self.preview_selection_path().is_some()
+            };
         }
         // Ctrl+Up - Go to parent
         if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp) && i.modifiers.ctrl) {
@@ -103,6 +114,10 @@ impl FileManager {
 
         // Escape - Deselect all
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if self.preview_open {
+                self.preview_open = false;
+                return;
+            }
             self.select_none();
             self.context_menu.hide();
         }

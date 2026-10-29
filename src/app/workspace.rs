@@ -143,8 +143,8 @@ impl FileManager {
                                 switch = Some(index);
                             }
                             if self.tabs.len() > 1 {
-                                let response =
-                                    ui.small_button("×").on_hover_text("Close tab · Ctrl+W");
+                                let response = crate::ui::buttons::compact(ui, "×")
+                                    .on_hover_text("Close tab · Ctrl+W");
                                 crate::ui::expose_control(
                                     ui,
                                     &format!("tab_close:{index}"),
@@ -162,7 +162,8 @@ impl FileManager {
                         .on_hover_text("Analyze folder sizes");
                     crate::ui::expose_control(ui, "storage_tab", "Storage Explorer", &response);
                     open_storage = response.clicked();
-                    let response = ui.button("+").on_hover_text("New tab · Ctrl+T");
+                    let response = crate::ui::buttons::accent(ui, "+", colors::CYAN)
+                        .on_hover_text("New tab · Ctrl+T");
                     crate::ui::expose_control(ui, "new_tab", "New tab", &response);
                     new = response.clicked();
                 });
@@ -239,8 +240,8 @@ impl FileManager {
                     ui.colored_label(colors::AMBER, error);
                 }
                 ui.horizontal(|ui| {
-                    go = ui.button("Go").clicked();
-                    cancel = ui.button("Cancel").clicked();
+                    go = crate::ui::buttons::accent(ui, "Go", colors::CYBER_GREEN).clicked();
+                    cancel = crate::ui::buttons::subtle(ui, "Cancel").clicked();
                 });
                 go |= ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
             });

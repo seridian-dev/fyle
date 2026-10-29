@@ -205,17 +205,19 @@ impl Editor {
                                 .color(crate::theme::colors::MUTED),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            close_requested = ui.button("Close editor").clicked();
-                            let save = ui
-                                .add_enabled(
-                                    !is_saving,
-                                    egui::Button::new(if document.is_dirty() {
-                                        "SAVE *"
-                                    } else {
-                                        "SAVE"
-                                    }),
-                                )
-                                .on_hover_text("Ctrl+S");
+                            close_requested =
+                                crate::ui::buttons::compact(ui, "Close editor").clicked();
+                            let save = crate::ui::buttons::enabled(
+                                ui,
+                                if document.is_dirty() {
+                                    "SAVE *"
+                                } else {
+                                    "SAVE"
+                                },
+                                crate::theme::colors::CYBER_GREEN,
+                                !is_saving,
+                            )
+                            .on_hover_text("Ctrl+S");
                             crate::ui::expose_control(ui, "editor_save", "Save document", &save);
                             if save.clicked() {
                                 save_requested = true;
@@ -242,7 +244,8 @@ impl Editor {
                         let matches = match_positions(document.text(), &self.find);
                         if !matches.is_empty() {
                             let index = self.match_index.min(matches.len() - 1);
-                            let previous = ui.small_button("◂").on_hover_text("Previous match");
+                            let previous = crate::ui::buttons::compact(ui, "◂")
+                                .on_hover_text("Previous match");
                             crate::ui::expose_control(
                                 ui,
                                 "editor_find_previous",
@@ -254,7 +257,8 @@ impl Editor {
                                 requested_match = Some((path.clone(), matches[previous_index]));
                                 self.match_index = previous_index;
                             }
-                            let next_button = ui.small_button("▸").on_hover_text("Next match");
+                            let next_button =
+                                crate::ui::buttons::compact(ui, "▸").on_hover_text("Next match");
                             crate::ui::expose_control(
                                 ui,
                                 "editor_find_next",
@@ -383,7 +387,7 @@ impl Editor {
                             );
                         }
                     });
-                } else if ui.button("Close editor").clicked() {
+                } else if crate::ui::buttons::compact(ui, "Close editor").clicked() {
                     close_requested = true;
                 }
                 if let Some(error) = &self.error {
@@ -395,12 +399,14 @@ impl Editor {
                             crate::theme::colors::AMBER,
                             "Unsaved changes will be lost.",
                         );
-                        if ui.button("Discard").clicked() {
+                        if crate::ui::buttons::accent(ui, "Discard", crate::theme::colors::CRIMSON)
+                            .clicked()
+                        {
                             self.documents.clear();
                             self.visible = false;
                             self.discard_confirmation = false;
                         }
-                        if ui.button("Keep editing").clicked() {
+                        if crate::ui::buttons::subtle(ui, "Keep editing").clicked() {
                             self.discard_confirmation = false;
                         }
                     });

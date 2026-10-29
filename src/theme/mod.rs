@@ -23,6 +23,21 @@ pub fn setup_cyberpunk_theme(ctx: &egui::Context) {
     visuals.widgets.active.bg_fill = colors::ELECTRIC_BLUE.linear_multiply(0.25);
     visuals.widgets.open.bg_fill = colors::CYBER_GREEN.linear_multiply(0.15);
 
+    // egui uses weak_bg_fill for window title bars. Give dialogs a tinted glass
+    // header and let the Fyle surface show through their dark, translucent body.
+    visuals.widgets.open.weak_bg_fill = Color32::from_rgba_unmultiplied(0, 91, 112, 220);
+    visuals.widgets.hovered.weak_bg_fill = Color32::from_rgba_unmultiplied(0, 91, 112, 185);
+    visuals.widgets.active.weak_bg_fill = Color32::from_rgba_unmultiplied(0, 117, 136, 220);
+    visuals.widgets.inactive.weak_bg_fill = Color32::from_rgba_unmultiplied(17, 33, 48, 200);
+    visuals.window_fill = Color32::from_rgba_unmultiplied(18, 23, 43, 236);
+    visuals.window_stroke = Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(0, 212, 255, 120));
+    visuals.window_shadow = egui::epaint::Shadow {
+        offset: egui::vec2(0.0, 10.0),
+        blur: 26.0,
+        spread: 0.0,
+        color: Color32::from_rgba_unmultiplied(0, 0, 0, 140),
+    };
+
     visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, colors::BORDER);
     visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, colors::ELECTRIC_BLUE);
     visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, colors::ELECTRIC_BLUE);
@@ -36,7 +51,7 @@ pub fn setup_cyberpunk_theme(ctx: &egui::Context) {
     visuals.error_fg_color = colors::CRIMSON;
     visuals.warn_fg_color = colors::AMBER;
 
-    visuals.window_rounding = egui::Rounding::same(3.0);
+    visuals.window_rounding = egui::Rounding::same(8.0);
     for widget in [
         &mut visuals.widgets.inactive,
         &mut visuals.widgets.hovered,

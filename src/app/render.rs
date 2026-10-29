@@ -334,7 +334,7 @@ impl eframe::App for FileManager {
                             ui.label("A fresh space. Create a file or folder from the toolbar.");
                         } else {
                             ui.label("No files match this lens.");
-                            let response = ui.button("Clear filters");
+                            let response = crate::ui::buttons::subtle(ui, "Clear filters");
                             crate::ui::expose_control(
                                 ui,
                                 "clear_filters",

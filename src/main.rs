@@ -4,6 +4,8 @@ mod app;
 extern crate objc;
 #[cfg(target_os = "macos")]
 mod native_menu;
+#[cfg(target_os = "macos")]
+mod native_preview;
 mod theme;
 mod ui;
 
@@ -80,6 +82,8 @@ fn main() -> Result<(), eframe::Error> {
             let mut app = FileManager::new_with_target(launch_target);
             #[cfg(target_os = "macos")]
             app.install_native_menu(&cc.egui_ctx);
+            #[cfg(target_os = "macos")]
+            native_preview::install();
             app.initialize_appearance(&cc.egui_ctx, cc.gl.as_deref());
             if automation {
                 if let Err(error) = app.enable_automation(&cc.egui_ctx) {

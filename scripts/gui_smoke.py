@@ -6,8 +6,24 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import struct
 import tempfile
 import time
+import wave
+import zlib
+
+
+def write_png_rgba(path, width, height, pixels):
+    def chunk(kind, data):
+        return (struct.pack('>I', len(data)) + kind + data
+                + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff))
+
+    scanlines = b''.join(b'\x00' + pixels[row * width * 4:(row + 1) * width * 4]
+                         for row in range(height))
+    path.write_bytes(b'\x89PNG\r\n\x1a\n'
+                     + chunk(b'IHDR', struct.pack('>2I5B', width, height, 8, 6, 0, 0, 0))
+                     + chunk(b'IDAT', zlib.compress(scanlines))
+                     + chunk(b'IEND', b''))
 
 
 def main():
@@ -58,6 +74,22 @@ def main():
                     raise
                 time.sleep(0.05)
 
+    def click_viewport(fraction_x, fraction_y):
+        for attempt in range(5):
+            state = request('state')
+            viewport = state['viewport']
+            scale = viewport['pixels_per_point']
+            try:
+                return request(
+                    'click', '--x', viewport['width'] * scale * fraction_x,
+                    '--y', viewport['height'] * scale * fraction_y,
+                    '--snapshot', state['snapshot_id'],
+                )
+            except RuntimeError as error:
+                if 'Stale snapshot' not in str(error) or attempt == 4:
+                    raise
+                time.sleep(0.05)
+
     def right_click(control_id):
         time.sleep(0.32)
         for attempt in range(5):
@@ -92,6 +124,13 @@ def main():
         (scan_fixture / 'big.bin').write_bytes(b'x' * 32768)
         (scan_fixture / 'nested' / 'medium.bin').write_bytes(b'y' * 1024)
         (fixture / 'engine.rs').write_text('fn main() { /* local peek fixture */ }\n// local peek fixture again\n')
+        write_png_rgba(fixture / 'preview.png', 2, 1,
+                       bytes((255, 32, 96, 255, 0, 220, 180, 255)))
+        with wave.open(str(fixture / 'preview.wav'), 'wb') as audio_fixture:
+            audio_fixture.setnchannels(1)
+            audio_fixture.setsampwidth(2)
+            audio_fixture.setframerate(8000)
+            audio_fixture.writeframes(b'\x00\x00' * 800)
         git_env = os.environ.copy()
         git_env.update({'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull})
         def git(*arguments):
@@ -100,7 +139,7 @@ def main():
         git('init', '-q')
         git('config', 'user.name', 'Fyle GUI Test')
         git('config', 'user.email', 'fyle@example.invalid')
-        git('add', 'alpha.txt', 'beta.txt', 'engine.rs', 'folder')
+        git('add', 'alpha.txt', 'beta.txt', 'engine.rs', 'preview.png', 'preview.wav', 'folder')
         git('commit', '-qm', 'GUI fixture')
         try:
             launched = run('launch', '--path', fixture / 'engine.rs')
@@ -221,6 +260,20 @@ def main():
             assert state['preview']['open'] and state['preview']['kind'] == 'text'
             assert 'local peek fixture' in state['preview']['text']
             capture('08-local-peek')
+            click('entry:preview.png')
+            state = request('key', '--key', 'Space')
+            state = request('wait')
+            assert state['preview']['open'] and state['preview']['kind'] == 'image'
+            capture('08-image-quick-look')
+            state = request('key', '--key', 'Space')
+            assert not state['preview']['open']
+            click('entry:preview.wav')
+            state = request('key', '--key', 'Space')
+            state = request('wait')
+            assert state['preview']['open'] and state['preview']['kind'] == 'audio'
+            capture('08-audio-quick-look')
+            state = request('key', '--key', 'Space')
+            assert not state['preview']['open']
             request('key', '--key', 'Ctrl+P')
             request('text', '--text', '>view')
             request('key', '--key', 'ArrowDown')
@@ -375,14 +428,8 @@ def main():
             else:
                 # The terminal surface paints correctly in some window layouts but
                 # its large click target is clipped from the automation map. Focus
-                # its center using the viewport and a fresh snapshot in that case.
-                viewport = state['viewport']
-                scale = viewport['pixels_per_point']
-                state = request(
-                    'click', '--x', viewport['width'] * scale * 0.60,
-                    '--y', viewport['height'] * scale * 0.76,
-                    '--snapshot', state['snapshot_id'],
-                )
+                # its center using fresh viewport geometry if the snapshot expires.
+                state = click_viewport(0.60, 0.76)
             request('text', '--text', 'printf FYLE_HARNESS_TERMINAL_OK')
             request('key', '--key', 'Enter')
             deadline = time.monotonic() + 5
@@ -408,6 +455,8 @@ def main():
                 'dialog text/Enter and background folder creation', 'navigation and empty state',
                 'composable lenses and invalid query feedback', 'fuzzy file jump and command dispatch',
                 'bounded asynchronous local text preview', 'palette Escape handling', 'independent tab navigation and filters',
+                'Space-key image preview popout with bounded local image decoding',
+                'compact audio-preview panel and playback controls for local audio',
                 'relative location entry and keyboard tab close',
                 'actual OpenGL shader and persisted appearance controls'],
                 'artifacts': sorted(path.name for path in args.output_dir.iterdir())}

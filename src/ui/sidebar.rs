@@ -112,7 +112,8 @@ pub fn render_sidebar(
                         .strong()
                         .color(colors::MUTED),
                 );
-                let response = ui.small_button("+").on_hover_text("Pin this folder");
+                let response =
+                    crate::ui::buttons::compact(ui, "+").on_hover_text("Pin this folder");
                 crate::ui::expose_control(ui, "pin_folder", "Pin this folder", &response);
                 if response.clicked() {
                     action = Some(SidebarAction::AddBookmark(

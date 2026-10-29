@@ -80,8 +80,10 @@ impl FileManager {
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        let close_button = ui
-                                            .button(RichText::new("×").size(20.0))
+                                        let close_button = crate::ui::buttons::compact(
+                                            ui,
+                                            RichText::new("×").size(20.0),
+                                        )
                                             .on_hover_text("Close Preferences");
                                         crate::ui::expose_control(
                                             ui,
@@ -269,7 +271,7 @@ impl FileManager {
                             ui.horizontal(|ui| {
                                 ui.add_space(16.0);
                                 if self.preferences_section == super::PreferencesSection::Appearance {
-                                    let response = ui.button("Reset highlight");
+                                    let response = crate::ui::buttons::subtle(ui, "Reset highlight");
                                     crate::ui::expose_control(ui, "appearance_reset", "Reset highlight color", &response);
                                     if response.clicked() {
                                         self.appearance.highlight = fyle::appearance::Appearance::default().highlight;
@@ -279,10 +281,10 @@ impl FileManager {
                                     ui.colored_label(colors::AMBER, error);
                                 }
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    let close_button = ui.button("Done");
+                                    let close_button = crate::ui::buttons::subtle(ui, "Done");
                                     crate::ui::expose_control(ui, "preferences_close", "Close Preferences", &close_button);
                                     close |= close_button.clicked();
-                                    let save_button = ui.add(egui::Button::new(RichText::new("Save changes").strong().color(egui::Color32::from_rgb(5, 20, 25))).fill(colors::CYBER_GREEN));
+                                    let save_button = crate::ui::buttons::accent(ui, "Save changes", colors::CYBER_GREEN);
                                     crate::ui::expose_control(ui, "appearance_save", "Save preferences", &save_button);
                                     save = save_button.clicked();
                                 });

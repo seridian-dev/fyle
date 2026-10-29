@@ -1,5 +1,6 @@
 mod actions;
 mod appearance;
+mod audio;
 mod automation;
 mod discovery;
 mod editor;
@@ -132,6 +133,8 @@ pub(crate) struct FileManager {
     preview_loader: fyle::core::preview::PreviewLoader,
     preview_loading: bool,
     preview_result: Option<anyhow::Result<fyle::core::preview::Preview>>,
+    preview_texture: Option<(PathBuf, egui::TextureHandle)>,
+    audio_preview: audio::AudioPreview,
     selected_entries: HashSet<PathBuf>,
     bookmarks: Vec<Bookmark>,
     dialog: DialogType,
@@ -222,6 +225,8 @@ impl FileManager {
             preview_loader: Default::default(),
             preview_loading: false,
             preview_result: None,
+            preview_texture: None,
+            audio_preview: Default::default(),
             selected_entries: HashSet::new(),
             bookmarks: load_bookmarks(),
             dialog: DialogType::None,
@@ -247,6 +252,7 @@ impl FileManager {
         self.preview_loader.clear();
         self.preview_path = None;
         self.preview_result = None;
+        self.preview_texture = None;
         self.preview_loading = false;
 
         self.entries.clear();

@@ -175,7 +175,7 @@ impl StorageExplorer {
                     "Scanning {} entries · {} found unreadable",
                     self.progress.visited_entries, self.progress.unreadable_entries
                 ));
-                let response = ui.small_button("Cancel");
+                let response = crate::ui::buttons::compact(ui, "Cancel");
                 crate::ui::expose_control(ui, "storage_cancel", "Cancel scan", &response);
                 if response.clicked() {
                     if let Some(job) = &self.tree_job {
@@ -346,19 +346,7 @@ impl StorageExplorer {
 }
 
 fn storage_button(ui: &mut egui::Ui, label: &str, accent: egui::Color32) -> egui::Response {
-    let response = ui.add(
-        egui::Button::new(RichText::new(label).strong().color(colors::TEXT))
-            .fill(accent.gamma_multiply(0.24))
-            .stroke(egui::Stroke::new(1.0_f32, accent)),
-    );
-    if response.hovered() {
-        ui.painter().rect_stroke(
-            response.rect.expand(1.0),
-            4.0,
-            egui::Stroke::new(1.0_f32, accent.gamma_multiply(0.65)),
-        );
-    }
-    response
+    crate::ui::buttons::accent(ui, label, accent)
 }
 
 fn summary_from_tree(

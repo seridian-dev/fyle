@@ -56,12 +56,12 @@ pub fn show_delete_dialog(ctx: &Context, paths: &[PathBuf]) -> DialogResult {
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
-                let response = ui.button(RichText::new(DELETE_LABEL).color(colors::CRIMSON));
+                let response = crate::ui::buttons::accent(ui, DELETE_LABEL, colors::CRIMSON);
                 crate::ui::expose_control(ui, "delete_confirm", DELETE_LABEL, &response);
                 if response.clicked() {
                     result = DialogResult::Execute(FileOperation::Remove(paths.to_vec()));
                 }
-                let response = ui.button("Cancel");
+                let response = crate::ui::buttons::subtle(ui, "Cancel");
                 crate::ui::expose_control(ui, "delete_cancel", "Cancel", &response);
                 if response.clicked() {
                     result = DialogResult::Closed;
@@ -107,7 +107,7 @@ pub fn show_copy_dialog(ctx: &Context, sources: &[PathBuf], destination: &Path) 
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
-                let response = ui.button(RichText::new("Copy").color(colors::CYBER_GREEN));
+                let response = crate::ui::buttons::accent(ui, "Copy", colors::CYBER_GREEN);
                 crate::ui::expose_control(ui, "copy_confirm", "Confirm copy", &response);
                 if response.clicked() {
                     result = DialogResult::Execute(FileOperation::Copy(
@@ -115,7 +115,7 @@ pub fn show_copy_dialog(ctx: &Context, sources: &[PathBuf], destination: &Path) 
                         destination.to_path_buf(),
                     ));
                 }
-                if ui.button("Cancel").clicked() {
+                if crate::ui::buttons::subtle(ui, "Cancel").clicked() {
                     result = DialogResult::Closed;
                 }
             });
@@ -159,16 +159,13 @@ pub fn show_move_dialog(ctx: &Context, sources: &[PathBuf], destination: &Path) 
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
-                if ui
-                    .button(RichText::new("Move").color(colors::AMBER))
-                    .clicked()
-                {
+                if crate::ui::buttons::accent(ui, "Move", colors::AMBER).clicked() {
                     result = DialogResult::Execute(FileOperation::Move(
                         sources.to_vec(),
                         destination.to_path_buf(),
                     ));
                 }
-                if ui.button("Cancel").clicked() {
+                if crate::ui::buttons::subtle(ui, "Cancel").clicked() {
                     result = DialogResult::Closed;
                 }
             });
@@ -229,7 +226,7 @@ pub fn show_properties_dialog(ctx: &Context, entry: &FileEntry) -> DialogResult 
             ui.separator();
             ui.add_space(4.0);
 
-            if ui.button("Close").clicked() {
+            if crate::ui::buttons::subtle(ui, "Close").clicked() {
                 result = DialogResult::Closed;
             }
         });
@@ -281,17 +278,20 @@ pub fn show_create_folder_dialog(
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
-                if ui
-                    .button(RichText::new("Create").color(colors::CYBER_GREEN))
-                    .clicked()
-                    && !state.name.is_empty()
+                if crate::ui::buttons::enabled(
+                    ui,
+                    "Create",
+                    colors::CYBER_GREEN,
+                    !state.name.is_empty(),
+                )
+                .clicked()
                 {
                     result = DialogResult::Execute(FileOperation::CreateFolder(
                         current_path.to_path_buf(),
                         state.name.clone(),
                     ));
                 }
-                if ui.button("Cancel").clicked() {
+                if crate::ui::buttons::subtle(ui, "Cancel").clicked() {
                     state.name.clear();
                     result = DialogResult::Closed;
                 }
@@ -346,17 +346,20 @@ pub fn show_create_file_dialog(
             ui.add_space(4.0);
 
             ui.horizontal(|ui| {
-                if ui
-                    .button(RichText::new("Create").color(colors::ELECTRIC_BLUE))
-                    .clicked()
-                    && !state.name.is_empty()
+                if crate::ui::buttons::enabled(
+                    ui,
+                    "Create",
+                    colors::ELECTRIC_BLUE,
+                    !state.name.is_empty(),
+                )
+                .clicked()
                 {
                     result = DialogResult::Execute(FileOperation::CreateFile(
                         current_path.to_path_buf(),
                         state.name.clone(),
                     ));
                 }
-                if ui.button("Cancel").clicked() {
+                if crate::ui::buttons::subtle(ui, "Cancel").clicked() {
                     state.name.clear();
                     result = DialogResult::Closed;
                 }
@@ -422,11 +425,7 @@ pub fn show_rename_dialog(
             ui.horizontal(|ui| {
                 let can_rename = !state.new_name.is_empty() && state.new_name != old_name;
 
-                if ui
-                    .add_enabled(
-                        can_rename,
-                        egui::Button::new(RichText::new("Rename").color(colors::CYBER_GREEN)),
-                    )
+                if crate::ui::buttons::enabled(ui, "Rename", colors::CYBER_GREEN, can_rename)
                     .clicked()
                 {
                     result = DialogResult::Execute(FileOperation::Rename(
@@ -434,7 +433,7 @@ pub fn show_rename_dialog(
                         state.new_name.clone(),
                     ));
                 }
-                if ui.button("Cancel").clicked() {
+                if crate::ui::buttons::subtle(ui, "Cancel").clicked() {
                     result = DialogResult::Closed;
                 }
             });
@@ -460,7 +459,7 @@ pub fn show_error_dialog(ctx: &Context, message: &str) -> bool {
 
             ui.add_space(8.0);
 
-            if ui.button("OK").clicked() {
+            if crate::ui::buttons::accent(ui, "OK", colors::ELECTRIC_BLUE).clicked() {
                 should_close = true;
             }
         });
