@@ -260,6 +260,8 @@ def main():
             assert state['preview']['open'] and state['preview']['kind'] == 'text'
             assert 'local peek fixture' in state['preview']['text']
             capture('08-local-peek')
+            state = request('key', '--key', 'Space')
+            assert not state['preview']['open']
             click('entry:preview.png')
             state = request('key', '--key', 'Space')
             state = request('wait')
