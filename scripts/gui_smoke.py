@@ -74,22 +74,6 @@ def main():
                     raise
                 time.sleep(0.05)
 
-    def click_viewport(fraction_x, fraction_y):
-        for attempt in range(5):
-            state = request('state')
-            viewport = state['viewport']
-            scale = viewport['pixels_per_point']
-            try:
-                return request(
-                    'click', '--x', viewport['width'] * scale * fraction_x,
-                    '--y', viewport['height'] * scale * fraction_y,
-                    '--snapshot', state['snapshot_id'],
-                )
-            except RuntimeError as error:
-                if 'Stale snapshot' not in str(error) or attempt == 4:
-                    raise
-                time.sleep(0.05)
-
     def right_click(control_id):
         time.sleep(0.32)
         for attempt in range(5):
@@ -424,16 +408,7 @@ def main():
             assert not state['terminal']['split']
             state = request('action', 'terminal_close_active')
             assert len(state['terminal']['sessions']) == 1 and state['terminal']['running']
-            state = request('state')
-            if any(control['id'] == 'terminal_screen' for control in state['controls']):
-                state = click('terminal_screen')
-            else:
-                # The terminal surface paints correctly in some window layouts but
-                # its large click target is clipped from the automation map. Focus
-                # its center using fresh viewport geometry if the snapshot expires.
-                state = click_viewport(0.60, 0.76)
-            request('text', '--text', 'printf FYLE_HARNESS_TERMINAL_OK')
-            request('key', '--key', 'Enter')
+            request('action', 'terminal_send', '--command', 'printf FYLE_HARNESS_TERMINAL_OK')
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
                 state = request('state')
