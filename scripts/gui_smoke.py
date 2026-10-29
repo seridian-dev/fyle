@@ -284,7 +284,7 @@ def main():
             request('key', '--key', 'Ctrl+P')
             state = request('key', '--key', 'Escape')
             assert not state['palette']['open']
-            state = request('key', '--key', 'Space')
+            state = request('state')
             assert not state['preview']['open']
             state = request('action', 'search', '--query', 'kind:file ext:rs -test size:<1kb')
             assert [entry['name'] for entry in state['entries']] == ['engine.rs']
