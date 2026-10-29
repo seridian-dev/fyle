@@ -12,8 +12,10 @@ categories = ["filesystem", "gui"]
 
 [features]
 default = ["gui", "trash"]
-gui = ["dep:eframe", "dep:egui", "dep:sysinfo", "syntax", "terminal"]
+gui = ["dep:eframe", "dep:egui", "dep:sysinfo", "syntax", "terminal", "image-preview", "audio-preview"]
 trash = ["dep:trash"]
+image-preview = ["dep:image"]
+audio-preview = ["dep:rodio"]
 syntax = ["dep:syntect"]
 terminal = ["dep:portable-pty", "dep:vt100"]
 
@@ -48,6 +50,8 @@ env_logger = "0.11"
 # Local agent harness: authenticated loopback transport and PNG capture
 getrandom = "0.2"
 png = "0.17"
+image = { version = "0.24.9", default-features = false, features = ["bmp", "gif", "ico", "jpeg", "png", "pnm", "qoi", "tga", "tiff", "webp"], optional = true }
+rodio = { version = "0.22.2", default-features = false, features = ["playback", "symphonia-aiff", "symphonia-aac", "symphonia-adpcm", "symphonia-caf", "symphonia-flac", "symphonia-isomp4", "symphonia-mp3", "symphonia-ogg", "symphonia-pcm", "symphonia-vorbis", "symphonia-wav"], optional = true }
 
 # Optional: Trash support (enabled with --features trash)
 trash = { version = "4.0", optional = true }
@@ -61,6 +65,10 @@ sevenz-rust2 = { version = "0.24", default-features = false, features = ["compre
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.25.0"
+objc = "0.2.7"
 
 [dev-dependencies]
 tempfile = "3.10"

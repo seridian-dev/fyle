@@ -59,7 +59,11 @@ impl FileManager {
     /// copied when the drag is released.
     fn render_drop_overlay(&self, ctx: &egui::Context) {
         let count = ctx.input(|i| i.raw.hovered_files.len());
-        if count == 0 || self.operation.is_some() || self.dialog != DialogType::None {
+        if count == 0
+            || self.storage.open
+            || self.operation.is_some()
+            || self.dialog != DialogType::None
+        {
             return;
         }
         let painter = ctx.layer_painter(egui::LayerId::new(
@@ -90,7 +94,13 @@ impl FileManager {
     /// A stable status line keeps the file viewport from jumping on selection.
     fn render_details_panel(&self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            if self.selected_entries.len() == 1 {
+            if self.operation.is_some() {
+                ui.label(
+                    RichText::new("Working…")
+                        .size(12.0)
+                        .color(colors::CYBER_GREEN),
+                );
+            } else if self.selected_entries.len() == 1 {
                 if let Some(entry) = self.entries.iter().find(|e| e.selected) {
                     ui.add(
                         egui::Label::new(
@@ -109,6 +119,16 @@ impl FileManager {
                         .truncate(true),
                     );
                 }
+            } else if !self.selected_entries.is_empty() {
+                ui.label(
+                    RichText::new(format!(
+                        "{} items selected  ·  {} items in folder",
+                        self.selected_entries.len(),
+                        self.entries.len()
+                    ))
+                    .size(12.0)
+                    .color(colors::MUTED),
+                );
             } else {
                 ui.label(
                     RichText::new(format!("{} items", self.entries.len()))
@@ -138,6 +158,19 @@ impl eframe::App for FileManager {
         self.workspace_input(input);
     }
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        #[cfg(target_os = "macos")]
+        if self
+            .native_menu
+            .as_ref()
+            .is_some_and(crate::native_menu::NativeMenu::take_settings_request)
+        {
+            if self.appearance_open {
+                self.appearance_open = false;
+            } else {
+                self.appearance_open = true;
+                self.preferences_section = PreferencesSection::General;
+            }
+        }
         if self.operation.is_some() && ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.error_message = Some(
@@ -146,6 +179,7 @@ impl eframe::App for FileManager {
         }
         self.poll_directory();
         self.poll_operation();
+        self.storage.poll();
         self.poll_preview();
         self.editor.poll_worker();
         self.review.poll();
@@ -154,6 +188,7 @@ impl eframe::App for FileManager {
             || self.editor.is_loading()
             || self.editor.is_saving()
             || self.review.is_busy()
+            || self.storage.is_scanning()
         {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
@@ -177,22 +212,24 @@ impl eframe::App for FileManager {
             #[cfg(target_os = "macos")]
             ui.add_space(26.0);
             self.render_tabs(ui);
-            ui.add_space(4.0);
-            let can_go_back = !self.history.is_empty();
-            let can_go_forward = !self.forward_history.is_empty();
+            if !self.storage.open {
+                ui.add_space(4.0);
+                let can_go_back = !self.history.is_empty();
+                let can_go_forward = !self.forward_history.is_empty();
 
-            if let Some(action) = render_toolbar(
-                ui,
-                &self.current_path,
-                self.entries.len(),
-                self.show_hidden,
-                &self.view_mode,
-                &mut self.search_query,
-                can_go_back,
-                can_go_forward,
-                &mut self.toolbar_more_open,
-            ) {
-                self.handle_toolbar_action(action);
+                if let Some(action) = render_toolbar(
+                    ui,
+                    &self.current_path,
+                    self.entries.len(),
+                    self.show_hidden,
+                    &self.view_mode,
+                    &mut self.search_query,
+                    can_go_back,
+                    can_go_forward,
+                    &mut self.toolbar_more_open,
+                ) {
+                    self.handle_toolbar_action(action);
+                }
             }
         });
 
@@ -219,15 +256,15 @@ impl eframe::App for FileManager {
             });
 
         // Bottom details panel
-        egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
-            ui.set_enabled(
-                self.operation.is_none()
-                    && !self.palette.open
-                    && !self.location_open
-                    && !self.appearance_open,
-            );
-            self.render_details_panel(ui);
-        });
+        if self.appearance.show_status_bar {
+            egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
+                if self.storage.open {
+                    self.storage.render_status(ui);
+                } else {
+                    self.render_details_panel(ui);
+                }
+            });
+        }
 
         self.render_preview(ctx);
 
@@ -246,70 +283,90 @@ impl eframe::App for FileManager {
                         && !self.appearance_open,
                 );
                 self.render_background(ui);
-                ui.label(
-                    RichText::new("DIRECTORY // LOCAL ACCESS")
-                        .monospace()
-                        .size(10.0)
-                        .color(colors::ELECTRIC_BLUE),
-                );
-                ui.horizontal(|ui| {
-                    ui.heading(
-                        self.current_path
-                            .file_name()
-                            .unwrap_or(self.current_path.as_os_str())
-                            .to_string_lossy(),
-                    );
-                    if self.operation.is_some() {
-                        ui.spinner();
-                        ui.label("Working…");
-                    }
-                    ui.label(
-                        RichText::new(format!(
-                            "{} ITEMS / {:02} SELECTED",
-                            self.entries.len(),
-                            self.selected_entries.len()
-                        ))
-                        .monospace()
-                        .size(11.0)
-                        .color(colors::CYBER_GREEN),
-                    );
-                    if self.loading {
-                        ui.spinner();
-                        ui.label("Loading folder…");
-                    }
-                });
-                if !self.loading && self.entries.is_empty() {
-                    if self.search_query.is_empty() {
-                        ui.label("A fresh space. Create a file or folder from the toolbar.");
-                    } else {
-                        ui.label("No files match this lens.");
-                        let response = ui.button("Clear filters");
-                        crate::ui::expose_control(ui, "clear_filters", "Clear filters", &response);
-                        if response.clicked() {
-                            self.search_query.clear();
-                            self.apply_filter();
+                if self.storage.open {
+                    if let Some(action) = self.storage.render(ui) {
+                        match action {
+                            #[cfg(feature = "trash")]
+                            storage::StorageAction::Trash(path) => {
+                                self.dialog = DialogType::ConfirmDelete(vec![path]);
+                            }
+                            storage::StorageAction::Preferences => {
+                                self.appearance_open = true;
+                                self.preferences_section = PreferencesSection::General;
+                            }
                         }
                     }
-                }
-
-                self.render_lenses(ui);
-
-                // Bulk operations toolbar
-                if let Some(action) = render_bulk_operations(ui, self.selected_entries.len()) {
-                    self.handle_bulk_action(action);
-                }
-
-                // Render the appropriate view and collect actions
-                let actions = match self.view_mode {
-                    ViewMode::List => {
-                        render_list_view(ui, &self.entries, &self.sort_by, &self.sort_order)
+                } else {
+                    ui.label(
+                        RichText::new("DIRECTORY // LOCAL ACCESS")
+                            .monospace()
+                            .size(10.0)
+                            .color(colors::ELECTRIC_BLUE),
+                    );
+                    ui.horizontal(|ui| {
+                        ui.heading(
+                            self.current_path
+                                .file_name()
+                                .unwrap_or(self.current_path.as_os_str())
+                                .to_string_lossy(),
+                        );
+                        if self.operation.is_some() {
+                            ui.spinner();
+                            ui.label("Working…");
+                        }
+                        ui.label(
+                            RichText::new(format!(
+                                "{} ITEMS / {:02} SELECTED",
+                                self.entries.len(),
+                                self.selected_entries.len()
+                            ))
+                            .monospace()
+                            .size(11.0)
+                            .color(colors::CYBER_GREEN),
+                        );
+                        if self.loading {
+                            ui.spinner();
+                            ui.label("Loading folder…");
+                        }
+                    });
+                    if !self.loading && self.entries.is_empty() {
+                        if self.search_query.is_empty() {
+                            ui.label("A fresh space. Create a file or folder from the toolbar.");
+                        } else {
+                            ui.label("No files match this lens.");
+                            let response = crate::ui::buttons::subtle(ui, "Clear filters");
+                            crate::ui::expose_control(
+                                ui,
+                                "clear_filters",
+                                "Clear filters",
+                                &response,
+                            );
+                            if response.clicked() {
+                                self.search_query.clear();
+                                self.apply_filter();
+                            }
+                        }
                     }
-                    ViewMode::Grid => render_grid_view(ui, &self.entries),
-                };
 
-                // Handle view actions
-                for action in actions {
-                    self.handle_view_action(action);
+                    self.render_lenses(ui);
+
+                    // Bulk operations toolbar
+                    if let Some(action) = render_bulk_operations(ui, self.selected_entries.len()) {
+                        self.handle_bulk_action(action);
+                    }
+
+                    // Render the appropriate view and collect actions
+                    let actions = match self.view_mode {
+                        ViewMode::List => {
+                            render_list_view(ui, &self.entries, &self.sort_by, &self.sort_order)
+                        }
+                        ViewMode::Grid => render_grid_view(ui, &self.entries),
+                    };
+
+                    // Handle view actions
+                    for action in actions {
+                        self.handle_view_action(action);
+                    }
                 }
             });
 
@@ -327,7 +384,8 @@ impl eframe::App for FileManager {
         self.render_appearance(ctx);
         self.editor.render(ctx);
         self.review.render(ctx, self.current_path.clone());
-        self.terminal.render(ctx, &self.current_path);
+        self.terminal
+            .render(ctx, &self.current_path, &self.appearance);
         self.poll_preview();
         if self.preview_loading {
             ctx.request_repaint_after(std::time::Duration::from_millis(30));

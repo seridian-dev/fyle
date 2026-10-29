@@ -13,6 +13,13 @@ impl FileManager {
     }
 
     pub(super) fn handle_keyboard(&mut self, ctx: &egui::Context) {
+        if self.dialog == DialogType::None
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Comma))
+        {
+            self.appearance_open = true;
+            self.preferences_section = PreferencesSection::General;
+            return;
+        }
         if self.terminal.is_open() {
             if ctx.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl && i.modifiers.alt) {
                 self.terminal.toggle(&self.current_path);
@@ -76,8 +83,19 @@ impl FileManager {
         {
             return;
         }
+        #[cfg(target_os = "macos")]
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::ALT, egui::Key::Space)) {
+            let path = self.preview_selection_path();
+            self.preview_open = false;
+            crate::native_preview::toggle(path.as_deref());
+            return;
+        }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Space)) {
-            self.preview_open = !self.preview_open;
+            self.preview_open = if self.preview_open {
+                false
+            } else {
+                self.preview_selection_path().is_some()
+            };
         }
         // Ctrl+Up - Go to parent
         if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp) && i.modifiers.ctrl) {
@@ -96,6 +114,10 @@ impl FileManager {
 
         // Escape - Deselect all
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if self.preview_open {
+                self.preview_open = false;
+                return;
+            }
             self.select_none();
             self.context_menu.hide();
         }
@@ -153,7 +175,7 @@ impl FileManager {
     /// confirm dialogs as in-app copy/move. Drops are ignored while an
     /// operation or dialog is active; those states already disable mutations.
     pub(super) fn handle_external_drop(&mut self, ctx: &egui::Context) {
-        if self.operation.is_some() || self.dialog != DialogType::None {
+        if self.storage.open || self.operation.is_some() || self.dialog != DialogType::None {
             return;
         }
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
@@ -180,7 +202,10 @@ impl FileManager {
     pub(super) fn handle_toolbar_action(&mut self, action: ToolbarAction) {
         match action {
             ToolbarAction::Navigate(path) => self.navigate_to(path),
-            ToolbarAction::Appearance => self.appearance_open = true,
+            ToolbarAction::Appearance => {
+                self.appearance_open = true;
+                self.preferences_section = PreferencesSection::General;
+            }
             ToolbarAction::Location => self.open_location(),
             ToolbarAction::GoBack => self.go_back(),
             ToolbarAction::Refresh => self.load_entries(),
@@ -278,6 +303,7 @@ impl FileManager {
     pub(super) fn handle_sidebar_action(&mut self, action: SidebarAction) {
         match action {
             SidebarAction::Navigate(path) => self.navigate_to(path),
+            SidebarAction::StorageExplorer => self.storage.toggle(&self.current_path),
             SidebarAction::RemoveBookmark(index) => {
                 if remove_bookmark(&mut self.bookmarks, index) {
                     if let Err(e) = save_bookmarks(&self.bookmarks) {

@@ -13,6 +13,7 @@ depends:
   - libxkbcommon0
   - libxkbcommon-x11-0
   - libwayland-client0
+  - libasound2
   - libegl1
   - libgl1
   - xdg-utils
@@ -22,6 +23,7 @@ overrides:
       - libxkbcommon.so.0()(64bit)
       - libxkbcommon-x11.so.0()(64bit)
       - libwayland-client.so.0()(64bit)
+      - libasound.so.2()(64bit)
       - libEGL.so.1()(64bit)
       - libGL.so.1()(64bit)
       - xdg-utils
@@ -29,6 +31,7 @@ overrides:
     depends:
       - libxkbcommon
       - wayland
+      - alsa-lib
       - libglvnd
       - mesa
       - xdg-utils

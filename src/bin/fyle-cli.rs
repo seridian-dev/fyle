@@ -13,6 +13,7 @@ const HELP: &str = "Fyle developer tools
   fyle-cli debug run [-- GUI_ARGS...]       launch GUI with full backtraces/debug logs
   fyle-cli debug paths                     locate local logs and updater data
   fyle-cli update [--check | --status | --rollback | --enable-auto | --disable-auto]
+  fyle-cli storage scan PATH              folder sizes as JSON (apparent bytes; no symlinks)
 Nothing is uploaded automatically. Update commands require an installed launcher.";
 
 fn main() -> Result<()> {
@@ -49,6 +50,7 @@ fn main() -> Result<()> {
             }
         }
         Some("logs") => logs(&store, &args[1..])?,
+        Some("storage") => storage(&args[1..])?,
         Some("debug") => match args.get(1).and_then(|arg| arg.to_str()) {
             Some("paths") if args.len() == 2 => print_json(&serde_json::json!({"diagnostics": store.root, "updater": fyle::diagnostics::managed_root()}))?,
             Some("bundle") => {
@@ -68,6 +70,16 @@ fn main() -> Result<()> {
         Some(command) => bail!("Unknown command: {command}\n{HELP}"),
     }
     Ok(())
+}
+fn storage(args: &[OsString]) -> Result<()> {
+    anyhow::ensure!(
+        args.len() == 2 && args[0] == "scan",
+        "Usage: fyle-cli storage scan PATH"
+    );
+    let root = PathBuf::from(&args[1]);
+    let cancelled = std::sync::atomic::AtomicBool::new(false);
+    let summary = fyle::core::storage::scan_folder(&root, &cancelled, |_| {})?;
+    print_json(&summary)
 }
 fn print_json(value: &impl serde::Serialize) -> Result<()> {
     println!("{}", serde_json::to_string_pretty(value)?);

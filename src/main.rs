@@ -1,4 +1,11 @@
 mod app;
+#[cfg(target_os = "macos")]
+#[macro_use]
+extern crate objc;
+#[cfg(target_os = "macos")]
+mod native_menu;
+#[cfg(target_os = "macos")]
+mod native_preview;
 mod theme;
 mod ui;
 
@@ -71,7 +78,12 @@ fn main() -> Result<(), eframe::Error> {
         options,
         Box::new(move |cc| {
             setup_cyberpunk_theme(&cc.egui_ctx);
+            app::register_terminal_font(&cc.egui_ctx);
             let mut app = FileManager::new_with_target(launch_target);
+            #[cfg(target_os = "macos")]
+            app.install_native_menu(&cc.egui_ctx);
+            #[cfg(target_os = "macos")]
+            native_preview::install();
             app.initialize_appearance(&cc.egui_ctx, cc.gl.as_deref());
             if automation {
                 if let Err(error) = app.enable_automation(&cc.egui_ctx) {

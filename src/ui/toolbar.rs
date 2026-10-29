@@ -301,7 +301,11 @@ pub fn render_toolbar(
                                 ("refresh", "Refresh", Icon::Forward, ToolbarAction::Refresh),
                                 (
                                     "appearance",
-                                    "Appearance",
+                                    if cfg!(target_os = "macos") {
+                                        "Preferences…   ⌘,"
+                                    } else {
+                                        "Preferences…   Ctrl+,"
+                                    },
                                     Icon::Peek,
                                     ToolbarAction::Appearance,
                                 ),

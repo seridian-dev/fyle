@@ -16,5 +16,6 @@ pub mod discovery;
 pub mod editor;
 pub mod git_review;
 pub mod preview;
+pub mod storage;
 #[cfg(feature = "terminal")]
 pub mod terminal;

@@ -7,6 +7,7 @@ finish-args:
   - --share=ipc
   - --socket=wayland
   - --socket=fallback-x11
+  - --socket=pulseaudio
   - --device=dri
   - --filesystem=host
   - --talk-name=org.freedesktop.portal.Desktop

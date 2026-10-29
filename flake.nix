@@ -14,6 +14,7 @@
           graphicsLibraries = with pkgs; [
             libxkbcommon
             wayland
+            alsa-lib
             libGL
             xorg.libX11
             xorg.libXcursor

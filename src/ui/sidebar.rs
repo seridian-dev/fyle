@@ -9,6 +9,7 @@ use sysinfo::Disks;
 #[derive(Debug, Clone)]
 pub enum SidebarAction {
     Navigate(PathBuf),
+    StorageExplorer,
     RemoveBookmark(usize),
     AddBookmark(String),
 }
@@ -111,7 +112,8 @@ pub fn render_sidebar(
                         .strong()
                         .color(colors::MUTED),
                 );
-                let response = ui.small_button("+").on_hover_text("Pin this folder");
+                let response =
+                    crate::ui::buttons::compact(ui, "+").on_hover_text("Pin this folder");
                 crate::ui::expose_control(ui, "pin_folder", "Pin this folder", &response);
                 if response.clicked() {
                     action = Some(SidebarAction::AddBookmark(
@@ -157,6 +159,16 @@ pub fn render_sidebar(
                 });
             }
             ui.add_space(20.0);
+            let response = nav_row(
+                ui,
+                "storage_explorer",
+                "Storage Explorer",
+                Icon::Drive,
+                false,
+            );
+            if response.clicked() {
+                action = Some(SidebarAction::StorageExplorer);
+            }
             icons::show(ui, Icon::Drive, 18.0, colors::MUTED);
             egui::CollapsingHeader::new(RichText::new("Storage").color(colors::MUTED))
                 .default_open(false)

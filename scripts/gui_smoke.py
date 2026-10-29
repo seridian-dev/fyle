@@ -6,8 +6,24 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import struct
 import tempfile
 import time
+import wave
+import zlib
+
+
+def write_png_rgba(path, width, height, pixels):
+    def chunk(kind, data):
+        return (struct.pack('>I', len(data)) + kind + data
+                + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff))
+
+    scanlines = b''.join(b'\x00' + pixels[row * width * 4:(row + 1) * width * 4]
+                         for row in range(height))
+    path.write_bytes(b'\x89PNG\r\n\x1a\n'
+                     + chunk(b'IHDR', struct.pack('>2I5B', width, height, 8, 6, 0, 0, 0))
+                     + chunk(b'IDAT', zlib.compress(scanlines))
+                     + chunk(b'IEND', b''))
 
 
 def main():
@@ -87,7 +103,18 @@ def main():
         (fixture / 'alpha.txt').write_text('fixture alpha')
         (fixture / 'beta.txt').write_text('fixture beta')
         (fixture / 'folder').mkdir()
+        scan_fixture = fixture / 'scan-fixture'
+        (scan_fixture / 'nested').mkdir(parents=True)
+        (scan_fixture / 'big.bin').write_bytes(b'x' * 32768)
+        (scan_fixture / 'nested' / 'medium.bin').write_bytes(b'y' * 1024)
         (fixture / 'engine.rs').write_text('fn main() { /* local peek fixture */ }\n// local peek fixture again\n')
+        write_png_rgba(fixture / 'preview.png', 2, 1,
+                       bytes((255, 32, 96, 255, 0, 220, 180, 255)))
+        with wave.open(str(fixture / 'preview.wav'), 'wb') as audio_fixture:
+            audio_fixture.setnchannels(1)
+            audio_fixture.setsampwidth(2)
+            audio_fixture.setframerate(8000)
+            audio_fixture.writeframes(b'\x00\x00' * 800)
         git_env = os.environ.copy()
         git_env.update({'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull})
         def git(*arguments):
@@ -96,7 +123,7 @@ def main():
         git('init', '-q')
         git('config', 'user.name', 'Fyle GUI Test')
         git('config', 'user.email', 'fyle@example.invalid')
-        git('add', 'alpha.txt', 'beta.txt', 'engine.rs', 'folder')
+        git('add', 'alpha.txt', 'beta.txt', 'engine.rs', 'preview.png', 'preview.wav', 'folder')
         git('commit', '-qm', 'GUI fixture')
         try:
             launched = run('launch', '--path', fixture / 'engine.rs')
@@ -217,6 +244,22 @@ def main():
             assert state['preview']['open'] and state['preview']['kind'] == 'text'
             assert 'local peek fixture' in state['preview']['text']
             capture('08-local-peek')
+            state = request('key', '--key', 'Space')
+            assert not state['preview']['open']
+            click('entry:preview.png')
+            state = request('key', '--key', 'Space')
+            state = request('wait')
+            assert state['preview']['open'] and state['preview']['kind'] == 'image'
+            capture('08-image-quick-look')
+            state = request('key', '--key', 'Space')
+            assert not state['preview']['open']
+            click('entry:preview.wav')
+            state = request('key', '--key', 'Space')
+            state = request('wait')
+            assert state['preview']['open'] and state['preview']['kind'] == 'audio'
+            capture('08-audio-quick-look')
+            state = request('key', '--key', 'Space')
+            assert not state['preview']['open']
             request('key', '--key', 'Ctrl+P')
             request('text', '--text', '>view')
             request('key', '--key', 'ArrowDown')
@@ -225,7 +268,7 @@ def main():
             request('key', '--key', 'Ctrl+P')
             state = request('key', '--key', 'Escape')
             assert not state['palette']['open']
-            state = request('key', '--key', 'Space')
+            state = request('state')
             assert not state['preview']['open']
             state = request('action', 'search', '--query', 'kind:file ext:rs -test size:<1kb')
             assert [entry['name'] for entry in state['entries']] == ['engine.rs']
@@ -265,7 +308,7 @@ def main():
             state = request('wait')
             assert len(state['tabs']['items']) == 1 and state['query'] == 'alpha'
             assert state['appearance']['shader_available'], state['appearance']['shader_error']
-            request('action', 'appearance')
+            request('action', 'preferences_appearance')
             state = click('appearance_effects')
             assert not state['appearance']['settings']['effects']
             state = click('appearance_effects')
@@ -273,6 +316,64 @@ def main():
             click('appearance_save')
             saved = json.loads((fixture / '.appearance-fixture' / 'appearance.json').read_text())
             assert saved['highlight'] == [0, 212, 255]
+            state = request('action', 'preferences')
+            assert state['preferences']['section'] == 'general'
+            assert state['preferences']['show_status_bar']
+            state = click('preferences_status_bar')
+            assert not state['preferences']['show_status_bar']
+            click('appearance_save')
+            settings = json.loads((fixture / '.appearance-fixture' / 'appearance.json').read_text())
+            assert settings['show_status_bar'] is False
+            state = click('preferences_status_bar')
+            assert state['preferences']['show_status_bar']
+            click('appearance_save')
+            state = request('action', 'preferences_terminal')
+            assert state['preferences']['section'] == 'terminal'
+            assert not state['preferences']['allow_external_terminals']
+            state = click('preferences_external_terminals')
+            assert state['preferences']['allow_external_terminals']
+            click('appearance_save')
+            settings = json.loads((fixture / '.appearance-fixture' / 'appearance.json').read_text())
+            assert settings['allow_external_terminals'] is True
+            state = click('preferences_external_terminals')
+            assert not state['preferences']['allow_external_terminals']
+            click('appearance_save')
+            click('preferences_close')
+            state = click('storage_explorer')
+            assert state['storage']['open'], state['storage']
+            state = click('storage_explorer')
+            assert not state['storage']['open'], state['storage']
+            cli_scan = subprocess.run([cli, 'storage', 'scan', str(scan_fixture)],
+                                      capture_output=True, text=True, timeout=30)
+            assert cli_scan.returncode == 0, cli_scan.stderr
+            cli_summary = json.loads(cli_scan.stdout)
+            assert cli_summary['apparent_bytes'] == 33792 and cli_summary['file_count'] == 2
+            state = request('action', 'storage_scan', '--path', scan_fixture)
+            state = request('wait')
+            summary = state['storage']['summary']
+            assert summary['apparent_bytes'] == 33792 and summary['file_count'] == 2
+            assert summary['directory_count'] == 1
+            assert {entry['name'] for entry in summary['entries']} == {'big.bin', 'nested'}
+            request('action', 'storage_select', '--name', 'big.bin')
+            state = request('action', 'peek')
+            state = request('wait')
+            assert state['preview']['path'] == str(scan_fixture / 'big.bin')
+            state = request('action', 'peek')
+            assert not state['preview']['open']
+            request('action', 'storage_select', '--name', 'nested')
+            state = request('action', 'storage_drill')
+            state = request('wait')
+            assert Path(state['storage']['summary']['root']) == scan_fixture / 'nested'
+            assert state['storage']['summary']['apparent_bytes'] == 1024
+            request('action', 'storage_scan', '--path', scan_fixture)
+            state = request('wait')
+            request('action', 'storage_select', '--name', 'big.bin')
+            state = request('action', 'storage_trash')
+            assert state['dialog'] == 'confirm_delete' and (scan_fixture / 'big.bin').is_file()
+            click('delete_cancel')
+            assert (scan_fixture / 'big.bin').is_file()
+            capture('10-storage-explorer')
+            click('tab:0')
             capture('10-appearance-settings')
             (fixture / 'review.rs').write_text('fn staged_version() {}\n')
             git('add', 'review.rs')
@@ -301,11 +402,13 @@ def main():
             assert state['terminal']['open'] and state['terminal']['running']
             state = request('action', 'terminal_new')
             assert len(state['terminal']['sessions']) == 2
+            state = request('action', 'terminal_split')
+            assert state['terminal']['split']
+            state = request('action', 'terminal_split')
+            assert not state['terminal']['split']
             state = request('action', 'terminal_close_active')
             assert len(state['terminal']['sessions']) == 1 and state['terminal']['running']
-            state = click('terminal_screen')
-            request('text', '--text', 'printf FYLE_HARNESS_TERMINAL_OK')
-            request('key', '--key', 'Enter')
+            request('action', 'terminal_send', '--command', 'printf FYLE_HARNESS_TERMINAL_OK')
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
                 state = request('state')
@@ -329,6 +432,8 @@ def main():
                 'dialog text/Enter and background folder creation', 'navigation and empty state',
                 'composable lenses and invalid query feedback', 'fuzzy file jump and command dispatch',
                 'bounded asynchronous local text preview', 'palette Escape handling', 'independent tab navigation and filters',
+                'Space-key image preview popout with bounded local image decoding',
+                'compact audio-preview panel and playback controls for local audio',
                 'relative location entry and keyboard tab close',
                 'actual OpenGL shader and persisted appearance controls'],
                 'artifacts': sorted(path.name for path in args.output_dir.iterdir())}

@@ -1,5 +1,6 @@
 //! UI components for the file manager.
 
+pub mod buttons;
 pub mod context_menu;
 pub mod dialogs;
 pub mod grid_view;

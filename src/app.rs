@@ -1,10 +1,12 @@
 mod actions;
 mod appearance;
+mod audio;
 mod automation;
 mod discovery;
 mod editor;
 mod render;
 mod review;
+mod storage;
 mod terminal;
 mod workspace;
 use crate::theme::colors;
@@ -33,12 +35,72 @@ use eframe::egui::{self, RichText};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+pub(crate) const TERMINAL_FONT_FAMILY: &str = "fyle_terminal_nerd";
+pub(crate) const SYSTEM_TERMINAL_FONT_FAMILY: &str = "fyle_terminal_system";
+
+pub(crate) fn register_terminal_font(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        TERMINAL_FONT_FAMILY.to_owned(),
+        egui::FontData::from_static(include_bytes!(
+            "../assets/fonts/JetBrainsMonoNerdFont-Regular.ttf"
+        )),
+    );
+    if let Some(system_font) = system_monospace_font() {
+        fonts.font_data.insert(
+            SYSTEM_TERMINAL_FONT_FAMILY.to_owned(),
+            egui::FontData::from_owned(system_font),
+        );
+    }
+    let mut family = fonts
+        .families
+        .get(&egui::FontFamily::Monospace)
+        .cloned()
+        .unwrap_or_default();
+    family.insert(0, TERMINAL_FONT_FAMILY.to_owned());
+    fonts.families.insert(
+        egui::FontFamily::Name(TERMINAL_FONT_FAMILY.into()),
+        family.clone(),
+    );
+    let mut system_family = family;
+    system_family.retain(|font| font != TERMINAL_FONT_FAMILY);
+    if fonts.font_data.contains_key(SYSTEM_TERMINAL_FONT_FAMILY) {
+        system_family.insert(0, SYSTEM_TERMINAL_FONT_FAMILY.to_owned());
+    }
+    system_family.push(TERMINAL_FONT_FAMILY.to_owned());
+    fonts.families.insert(
+        egui::FontFamily::Name(SYSTEM_TERMINAL_FONT_FAMILY.into()),
+        system_family,
+    );
+    ctx.set_fonts(fonts);
+}
+
+fn system_monospace_font() -> Option<Vec<u8>> {
+    #[cfg(target_os = "macos")]
+    let candidates = [
+        "/System/Library/Fonts/SFNSMono.ttf",
+        "/System/Library/Fonts/Supplemental/Andale Mono.ttf",
+    ];
+    #[cfg(target_os = "linux")]
+    let candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf",
+    ];
+    #[cfg(target_os = "windows")]
+    let candidates = ["C:\\Windows\\Fonts\\consola.ttf"];
+    candidates.iter().find_map(|path| std::fs::read(path).ok())
+}
+
 pub(crate) struct FileManager {
     automation: Option<automation::Automation>,
     appearance: fyle::appearance::Appearance,
     appearance_store: fyle::appearance::SettingsStore,
     appearance_open: bool,
+    preferences_section: PreferencesSection,
     appearance_error: Option<String>,
+    #[cfg(target_os = "macos")]
+    native_menu: Option<crate::native_menu::NativeMenu>,
     shader: Option<std::sync::Arc<crate::theme::shader::HudShader>>,
     shader_error: Option<String>,
     current_path: PathBuf,
@@ -63,6 +125,7 @@ pub(crate) struct FileManager {
     palette: discovery::Palette,
     editor: editor::Editor,
     review: review::Review,
+    storage: storage::StorageExplorer,
     terminal: terminal::TerminalPanel,
     preview_open: bool,
     preview_wrap: bool,
@@ -70,6 +133,8 @@ pub(crate) struct FileManager {
     preview_loader: fyle::core::preview::PreviewLoader,
     preview_loading: bool,
     preview_result: Option<anyhow::Result<fyle::core::preview::Preview>>,
+    preview_texture: Option<(PathBuf, egui::TextureHandle)>,
+    audio_preview: audio::AudioPreview,
     selected_entries: HashSet<PathBuf>,
     bookmarks: Vec<Bookmark>,
     dialog: DialogType,
@@ -85,7 +150,20 @@ pub(crate) struct FileManager {
     forward_history: Vec<PathBuf>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum PreferencesSection {
+    #[default]
+    General,
+    Appearance,
+    Terminal,
+}
+
 impl FileManager {
+    #[cfg(target_os = "macos")]
+    pub(crate) fn install_native_menu(&mut self, ctx: &egui::Context) {
+        self.native_menu = Some(crate::native_menu::NativeMenu::install(ctx.clone()));
+    }
+
     pub(crate) fn new_with_target(target: fyle::startup::LaunchTarget) -> Self {
         let mut app = Self::new(target.directory);
         if let Some(file) = target.file {
@@ -111,7 +189,10 @@ impl FileManager {
             appearance,
             appearance_store,
             appearance_open: false,
+            preferences_section: PreferencesSection::General,
             appearance_error,
+            #[cfg(target_os = "macos")]
+            native_menu: None,
             shader: None,
             shader_error: None,
             current_path: current_path.clone(),
@@ -136,6 +217,7 @@ impl FileManager {
             palette: Default::default(),
             editor: editor::Editor::default(),
             review: review::Review::default(),
+            storage: storage::StorageExplorer::default(),
             terminal: terminal::TerminalPanel::default(),
             preview_open: false,
             preview_wrap: true,
@@ -143,6 +225,8 @@ impl FileManager {
             preview_loader: Default::default(),
             preview_loading: false,
             preview_result: None,
+            preview_texture: None,
+            audio_preview: Default::default(),
             selected_entries: HashSet::new(),
             bookmarks: load_bookmarks(),
             dialog: DialogType::None,
@@ -168,6 +252,7 @@ impl FileManager {
         self.preview_loader.clear();
         self.preview_path = None;
         self.preview_result = None;
+        self.preview_texture = None;
         self.preview_loading = false;
 
         self.entries.clear();
@@ -205,7 +290,11 @@ impl FileManager {
                     self.error_message = Some(format!("File operation failed: {error:#}"));
                 }
                 self.operation = None;
-                self.load_entries();
+                if self.storage.open {
+                    self.storage.refresh();
+                } else {
+                    self.load_entries();
+                }
             }
         }
     }
