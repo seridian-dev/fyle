@@ -1,0 +1,14 @@
+# Local quality gates (no GitHub Actions). Installed by `bun install` (prepare script in package.json).
+# Rust project: lefthook is used only as the hook runner, so the commands are cargo.
+pre-commit:
+  commands:
+    fmt:
+      glob: "*.rs"
+      run: cargo fmt --check
+
+pre-push:
+  commands:
+    clippy:
+      run: cargo clippy --locked --all-targets --all-features -- -D warnings
+    test:
+      run: cargo test --locked --all-features

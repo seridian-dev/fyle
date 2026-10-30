@@ -11,3 +11,6 @@ __pycache__/
 /gui-artifacts/
 /fyle-debug-*.json
 /fyle-gui-*.png
+
+# Git hooks tooling (lefthook via bun)
+node_modules/
